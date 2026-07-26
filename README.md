@@ -15,9 +15,9 @@ idea → /jloop-spec  (interviews you → files a Linear issue + a machine-reada
       → you merge                            ← agents never merge
 ```
 
-The Linear state machine is a **closed four-label vocabulary**:
-`spec-waiting-approval → approved → waiting-to-merge → completed`. Agents set
-`spec-waiting-approval` (spec) and `waiting-to-merge` (PR opened); `approved`
+The Linear state machine is a **closed six-label vocabulary**:
+`spec-waiting-approval → approved → build-in-progress → build-complete → waiting-to-merge → completed`. Agents set
+`spec-waiting-approval` (spec) and `build-complete` + `waiting-to-merge` (PR opened); `approved`
 and `completed` are human-only gates. On completion, all pipeline labels are
 stripped and only `completed` remains.
 

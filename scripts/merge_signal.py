@@ -7,14 +7,17 @@ After jloop-build opens exactly one PR, the issue should visibly enter the
 finished-but-unmerged issue looked identical to one still being built.
 
 Two side effects, both idempotency-guarded (AC-4, keyed `merge-signal:<issue>`):
-  1. LABEL SWAP (AC-2): remove `approved`, add `waiting-to-merge`. Exactly one
-     state label at a time; non-state labels (Feature/Improvement/Bug) untouched.
+  1. LABEL SWAP (AC-2): remove `approved` (and the transient `build-in-progress`),
+     keep `build-complete`, add `waiting-to-merge`. After finalize the issue carries
+     the `build-complete` + `waiting-to-merge` pair plus any non-state labels
+     (Feature/Improvement/Bug), which are always untouched.
   2. DESCRIPTION CALLOUT (AC-3): insert a block on its own line immediately
      below the `## Problem` section (before the next `## ` heading), reading
      exactly:  **✅ Solution Ready For Merge**  → [<url>](<url>)
 
-State machine (four labels, closed vocabulary — AC-1):
-    spec-waiting-approval -> approved -> waiting-to-merge -> completed
+State machine (six labels, closed vocabulary — AC-1):
+    spec-waiting-approval -> approved -> build-in-progress ->
+    build-complete -> waiting-to-merge -> completed
 
 Design (matches watch.py): this script does NOT call the Linear API directly
 (NG-4: no new connector/tooling). It computes the exact desired mutation and
@@ -47,9 +50,16 @@ IDEMPOTENCY = REPO_ROOT / "scripts" / "idempotency.py"
 ACTION_DIR = Path(os.environ.get("JLOOP_ACTION_DIR", str(REPO_ROOT / ".factory" / "actions")))
 
 # Closed state-label vocabulary (AC-1). Order == workflow progression.
-STATE_LABELS = ["spec-waiting-approval", "approved", "waiting-to-merge", "completed"]
-FROM_LABEL = "approved"
-TO_LABEL = "waiting-to-merge"
+# The build-aware machine: spec -> approved -> build-in-progress -> build-complete
+# -> waiting-to-merge -> completed. `build-in-progress` is transient (dropped when
+# the build finalizes into build-complete); `build-complete` persists through the
+# waiting-to-merge phase as a record that the PR's implementation is done.
+STATE_LABELS = ["spec-waiting-approval", "approved", "build-in-progress",
+                "build-complete", "waiting-to-merge", "completed"]
+FROM_LABEL = "approved"          # removed at finalize (human approved to build)
+TO_LABEL = "waiting-to-merge"    # added at finalize (PR open, awaiting merge)
+TRANSIENT_LABEL = "build-in-progress"   # dropped at finalize (build now complete)
+PRESERVE_LABEL = "build-complete"       # retained through waiting-to-merge
 
 CALLOUT_HEAD = "**✅ Solution Ready For Merge**"
 # Matches a previously-inserted callout block (head + its link line), so a
@@ -66,24 +76,33 @@ _CALLOUT_RE = re.compile(
 def swap_labels(labels):
     """Return (new_labels, added, removed).
 
-    Remove `approved`, add `waiting-to-merge`; ensure at most one state label
-    remains (drop any other state labels too, e.g. a stray spec-waiting-approval).
-    Non-state labels are preserved in original order (AC-2).
+    Finalize the state labels:
+      - remove `approved` (FROM_LABEL) and the transient `build-in-progress`;
+      - KEEP `build-complete` (PRESERVE_LABEL) so the implementation-done signal
+        survives the waiting-to-merge phase;
+      - add `waiting-to-merge` (TO_LABEL) if not already present;
+      - drop any other state label (e.g. a stray spec-waiting-approval);
+      - preserve non-state labels (Feature/Improvement/Bug) in original order.
     """
     added, removed = [], []
     out = []
     for lbl in labels:
         if lbl in STATE_LABELS:
-            # drop every state label; we re-add exactly one below
-            if lbl != TO_LABEL:
-                removed.append(lbl)
+            if lbl == TO_LABEL:
+                continue  # already the target; re-appended below
+            if lbl in (FROM_LABEL, TRANSIENT_LABEL, PRESERVE_LABEL):
+                if lbl != PRESERVE_LABEL:
+                    removed.append(lbl)  # approved + build-in-progress are dropped
+                if lbl == PRESERVE_LABEL:
+                    out.append(lbl)      # build-complete is kept
+                continue
+            # any other state label (spec-waiting-approval, completed) -> drop
+            removed.append(lbl)
             continue
-        out.append(lbl)
+        out.append(lbl)  # non-state label preserved
     if TO_LABEL not in labels:
         added.append(TO_LABEL)
     out.append(TO_LABEL)
-    # `removed` is what to strip; caller may only strip FROM_LABEL if API is
-    # add/remove based — but returning all state labels keeps "one at a time".
     return out, added, removed
 
 

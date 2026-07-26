@@ -1,0 +1,15 @@
+{
+  "issue": "GOL-11",
+  "pr": 5,
+  "verdict": "loop-approved",
+  "scope_ok": true,
+  "violations": [],
+  "checks": {
+    "validate.py": "OK",
+    "test_merge_signal": "30 passed",
+    "test_watch": "6 passed",
+    "four-label-grep": "none"
+  },
+  "protected_touched": false,
+  "required_ci": "none configured in this env (gh/CI absent) \u2014 flagged needs-human-review equivalent"
+}
