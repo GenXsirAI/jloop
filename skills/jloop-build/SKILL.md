@@ -1,6 +1,6 @@
 ---
 name: jloop-build
-description: Claim the next safe agent-ready Linear issue with an atomic lease, implement only its contract, and open exactly one PR. Use to run jloop's builder or fix jloop review feedback. Designed for /loop; one pass does one unit of work.
+description: Claim the next approved Linear issue with an atomic lease, implement only its contract, and open exactly one PR. Use to run jloop's builder or fix jloop review feedback. Designed for /loop; one pass does one unit of work.
 version: 1.0.0
 license: MIT
 ---
@@ -49,10 +49,11 @@ lease, end the pass. Do not retry human-only decisions.
 
 ## 2. Pick
 List issues on team `TEAM` meeting EVERY condition:
-- labeled `agent-ready`, unassigned, not labeled `blocked`
+- labeled `approved`, unassigned, not labeled `blocked`
 - **no unresolved blocker relation** (respect blocked-by chains)
 Sort by priority, then oldest first. Empty queue → say so and end. Never invent
-work; never pick a blocked issue.
+work; never pick a blocked issue. An issue still labeled `spec-waiting-approval`
+without `approved` has not cleared the human gate — never build it.
 
 ## 3. Claim with an ATOMIC LEASE (jloop's fix for Finn-loop's soft lock)
 Before reading deeply or writing code:
@@ -62,9 +63,11 @@ $PY scripts/lease.py acquire TEAM-NNN --owner "$JLOOP_WORKER_ID"
 - **Exit 3** → someone holds a live lease. Return to step 2 and pick different
   work. This is the real mutual exclusion Finn-loop lacks; two simultaneous
   sessions cannot both build the same issue.
-- **Exit 0** → you own it. Then assign yourself in Linear and move the issue to
-  the team's started state (prefer `In Progress`). Re-fetch; if it became
-  blocked / reassigned / not `agent-ready`, release the lease and return to step 2.
+- **Exit 0** → you own it. Then assign yourself in Linear, move the issue to
+  the team's started state (prefer `In Progress`), and remove the
+  `spec-waiting-approval` label (the spec is no longer waiting once you build it;
+  leave `approved` in place). Re-fetch; if it became blocked / reassigned / no
+  longer `approved`, release the lease and return to step 2.
 - Commit the new `.factory/leases/TEAM-NNN.json` so the claim is durable and
   visible. Renew the lease periodically during long work:
   `$PY scripts/lease.py renew TEAM-NNN --owner "$JLOOP_WORKER_ID"`.
@@ -130,6 +133,6 @@ exists. **Never merge, never enable auto-merge.** Release the lease
 ## 8. Blocked
 Comment ONE specific answerable question (state the exact decision, the options,
 and which AC it affects — never "this is unclear"). Apply `blocked`, unassign,
-leave `agent-ready` in place, release the lease, end the pass. The pick query
+leave `approved` in place, release the lease, end the pass. The pick query
 excludes `blocked`, so the issue reappears only after a human answers and removes
 the label.

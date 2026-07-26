@@ -97,13 +97,18 @@ review time, turning "Other behavior changes: None" into a checked fact.
 
 ## 5. Confirm and file
 Show the full draft, get go-ahead, then create the issue on the configured
-`TEAM` Linear team via the Linear connector with the draft as the body. Report
-the exact issue identifier and URL Linear returns. Commit the contract file on a
-short-lived branch and open a tiny PR (or commit to the spec branch) so the
-contract is version-controlled and reviewable alongside the code later.
+`TEAM` Linear team via the Linear connector with the draft as the body. Apply
+the `spec-waiting-approval` label to the new issue to signal a spec has been
+filed and is awaiting the human decision. Report the exact issue identifier and
+URL Linear returns. Commit the contract file on a short-lived branch and open a
+tiny PR (or commit to the spec branch) so the contract is version-controlled and
+reviewable alongside the code later.
 
 ## Hard rules
-- Never apply the `agent-ready` label. The user applies it in Linear after a
-  final read — that label is the approval gate between "idea" and "an agent builds it".
+- Apply `spec-waiting-approval`, but **never** apply the `approved` label. The
+  human adds `approved` in Linear after a final read — that label is the
+  approval gate between "idea" and "an agent builds it". The two-label handshake
+  is deliberate: `spec-waiting-approval` (agent says "ready for your review") →
+  `approved` (human says "go").
 - The contract `version` must equal the Linear issue's current spec version. If
   the user edits the spec later, bump both.

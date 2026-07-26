@@ -8,8 +8,8 @@ duplicate PRs or comments, and **graph-verified scope enforcement** so an agent
 cannot silently exceed the contract.
 
 ```
-idea → /jloop-spec  (interviews you → files a Linear issue + a machine-readable contract)
-      → you label it agent-ready            ← the one human approval gate
+idea → /jloop-spec  (interviews you → files a Linear issue + a machine-readable contract, labels it spec-waiting-approval)
+      → you add the `approved` label          ← the one human approval gate
       → /jloop-build (leases the issue → implements only its contract → opens ONE PR)
       → /jloop-review(graph-verifies scope + required CI → posts a verdict + label)
       → you merge                            ← agents never merge
@@ -69,15 +69,17 @@ worker and to CI. Only local scratch is gitignored.
    `.claude/skills/…` or `~/.hermes/skills/…`) and `scripts/` + `.factory/`
    into the target repo.
 2. Replace the `TEAM` placeholder in the skills with your Linear team key.
-3. Create labels idempotently — Linear: `agent-ready`, `blocked`; GitHub:
-   `loop-approved`, `loop-changes-requested`, `needs-human-review`.
+3. Create labels idempotently — Linear: `spec-waiting-approval`, `approved`,
+   `blocked`; GitHub: `loop-approved`, `loop-changes-requested`,
+   `needs-human-review`.
 4. Export a worker identity: `export JLOOP_WORKER_ID="$(whoami)@$(hostname)-$$"`.
 5. Run `python scripts/validate.py` — it must print `jloop validation OK`.
 
 ## Daily rhythm
 
-1. `/jloop-spec` on any idea → read the filed issue + contract → if you approve
-   the exact contract, apply `agent-ready` in Linear (**only a human does this**).
+1. `/jloop-spec` on any idea → it files the issue and labels it
+   `spec-waiting-approval` → read the filed issue + contract → if you approve the
+   exact contract, add the `approved` label in Linear (**only a human does this**).
 2. Run the builder loop (one builder per team). Optionally run a **separate**
    reviewer session (fresh context, separate identity).
 3. Merge only PRs that are `loop-approved`, conflict-free, green on required
