@@ -10,10 +10,16 @@ cannot silently exceed the contract.
 ```
 idea → /jloop-spec  (interviews you → files a Linear issue + a machine-readable contract, labels it spec-waiting-approval)
       → you add the `approved` label          ← the one human approval gate
-      → /jloop-build (leases the issue → implements only its contract → opens ONE PR)
+      → /jloop-build (leases the issue → implements only its contract → opens ONE PR → labels it waiting-to-merge + posts a "Solution Ready For Merge" callout on the issue)
       → /jloop-review(graph-verifies scope + required CI → posts a verdict + label)
       → you merge                            ← agents never merge
 ```
+
+The Linear state machine is a **closed four-label vocabulary**:
+`spec-waiting-approval → approved → waiting-to-merge → completed`. Agents set
+`spec-waiting-approval` (spec) and `waiting-to-merge` (PR opened); `approved`
+and `completed` are human-only gates. On completion, all pipeline labels are
+stripped and only `completed` remains.
 
 jloop is a from-scratch reimplementation inspired by the ideas in
 [finna/Finn-loop](https://github.com/finna/Finn-loop), redesigned to fix its
@@ -70,8 +76,8 @@ worker and to CI. Only local scratch is gitignored.
    into the target repo.
 2. Replace the `TEAM` placeholder in the skills with your Linear team key.
 3. Create labels idempotently — Linear: `spec-waiting-approval`, `approved`,
-   `blocked`; GitHub: `loop-approved`, `loop-changes-requested`,
-   `needs-human-review`.
+   `waiting-to-merge`, `completed`, `blocked`; GitHub: `loop-approved`,
+   `loop-changes-requested`, `needs-human-review`.
 4. Export a worker identity: `export JLOOP_WORKER_ID="$(whoami)@$(hostname)-$$"`.
 5. Run `python scripts/validate.py` — it must print `jloop validation OK`.
 

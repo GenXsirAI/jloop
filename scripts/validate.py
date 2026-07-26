@@ -44,7 +44,7 @@ def check_frontmatter():
 
 
 def check_scripts_exist():
-    for s in ("lease.py", "idempotency.py", "verify_scope.py"):
+    for s in ("lease.py", "idempotency.py", "verify_scope.py", "merge_signal.py"):
         if not (ROOT / "scripts" / s).exists():
             FAIL.append(f"missing script: scripts/{s}")
 

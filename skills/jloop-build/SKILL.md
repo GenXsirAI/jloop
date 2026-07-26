@@ -127,18 +127,42 @@ amended (and contract `version` bumped) before opening the PR.
 
 Comment the PR URL on the issue (idempotency-guarded:
 `comment:TEAM-NNN:pr-url:<sha>`). Move the issue to the review state if one
-exists. **Never merge, never enable auto-merge.** Release the lease
+exists. **Never merge, never enable auto-merge.**
+
+### 7a. Signal "waiting to merge" (finalize)
+Right after the PR is open, run the finalize step so the issue visibly enters
+the **built, PR open, awaiting human merge** state (idempotency-guarded, key
+`merge-signal:TEAM-NNN`):
+```bash
+$PY scripts/merge_signal.py plan TEAM-NNN --url "<pr_url>" \
+  --labels '<current issue labels JSON>' --description-file <issue_body_file>
+```
+- **Exit 0** → apply the emitted action payload with the Linear connector:
+  swap the state label (**remove `approved`, add `waiting-to-merge`** — only one
+  state label at a time; leave `Feature`/`Improvement`/`Bug` untouched), and set
+  the issue description to `new_description` (inserts a `**✅ Solution Ready For
+  Merge**` callout linking the PR, directly under `## Problem`).
+- **Exit 3** → already signalled for this issue; do nothing (idempotent).
+
+The four-label state machine is a **closed vocabulary**:
+`spec-waiting-approval → approved → waiting-to-merge → completed`. `approved`
+and `completed` remain human-only; `waiting-to-merge` is a signal set by the
+build, never authorization — agents still never merge.
+
+Release the lease
 (`$PY scripts/lease.py release TEAM-NNN --owner "$JLOOP_WORKER_ID"`) and end.
 
 ## 9. Close-out (when the work is finished)
 When the issue reaches the completed state (`Done`) — whether a human marks it
-after merging your PR, or you do — **strip the approval-gate labels**
-`spec-waiting-approval`, `approved`, and `agent-ready`. They are pipeline
-signals (spec drafted / human approved to build) that mean nothing once the
-work is done; leaving them on makes a completed issue look like it is still
-awaiting a decision. A finished issue should carry no gate label — only its
-state. `blocked` is moot once done; the `loop-*` labels may stay as merge
-evidence.
+after merging your PR, or you do — **strip the state/gate labels**
+`spec-waiting-approval`, `approved`, `waiting-to-merge`, and `agent-ready`, and
+apply `completed`. The full state machine is a closed four-label vocabulary:
+`spec-waiting-approval → approved → waiting-to-merge → completed`. The first
+three are pipeline signals (spec drafted / human approved to build / built and
+awaiting merge) that mean nothing once the work is done; leaving them on makes a
+completed issue look like it is still in the pipeline. A finished issue should
+carry only `completed`. `blocked` is moot once done; the `loop-*` GitHub labels
+may stay as merge evidence.
 
 Archiving (to drop a finished issue from the Active/All view) is NOT a
 `save_issue` state — Linear archives via the GraphQL `issueArchive` mutation:
