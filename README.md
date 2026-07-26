@@ -96,6 +96,13 @@ worker and to CI. Only local scratch is gitignored.
   **graph-enforced**. Only editing the issue *and bumping the contract version*
   can change scope.
 - Blocked issues and escalated PRs leave the automated queue until a human acts.
+- On completion (`Done`/completed state), **strip the queue labels**
+  `spec-waiting-approval`, `approved`, and `agent-ready`. They are pipeline
+  signals (spec drafted / human-approved-to-build) that mean nothing once the
+  work is finished; leaving them on makes a completed issue look like it is
+  still awaiting a decision. A completed issue should carry no approval-gate
+  label — only a state. (Discovered when GOL-7/GOL-8 kept their gate labels
+  after being marked Done.)
 - Agents never merge or enable auto-merge. `loop-approved` is evidence, not
   authorization.
 

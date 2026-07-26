@@ -130,6 +130,16 @@ Comment the PR URL on the issue (idempotency-guarded:
 exists. **Never merge, never enable auto-merge.** Release the lease
 (`$PY scripts/lease.py release TEAM-NNN --owner "$JLOOP_WORKER_ID"`) and end.
 
+## 9. Close-out (when the work is finished)
+When the issue reaches the completed state (`Done`) — whether a human marks it
+after merging your PR, or you do — **strip the approval-gate labels**
+`spec-waiting-approval`, `approved`, and `agent-ready`. They are pipeline
+signals (spec drafted / human approved to build) that mean nothing once the
+work is done; leaving them on makes a completed issue look like it is still
+awaiting a decision. A finished issue should carry no gate label — only its
+state. `blocked` is moot once done; the `loop-*` labels may stay as merge
+evidence.
+
 ## 8. Blocked
 Comment ONE specific answerable question (state the exact decision, the options,
 and which AC it affects — never "this is unclear"). Apply `blocked`, unassign,
