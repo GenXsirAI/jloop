@@ -66,12 +66,19 @@ def check_lease_and_idem():
             return subprocess.run([sys.executable, *args], env=env,
                                   capture_output=True, text=True)
 
-        r = run([lease, "acquire", "T-1", "--owner", "a", "--ttl", "1"])
+        # Contention check uses a long TTL so it cannot expire mid-test
+        # (a short TTL here races on slow/fast CI runners — fixed after a
+        # flaky CI failure during the GOL-7 shakedown).
+        r = run([lease, "acquire", "T-1", "--owner", "a", "--ttl", "3600"])
         if r.returncode != 0: FAIL.append("lease: first acquire should succeed")
-        r = run([lease, "acquire", "T-1", "--owner", "b", "--ttl", "1"])
+        r = run([lease, "acquire", "T-1", "--owner", "b", "--ttl", "3600"])
         if r.returncode != 3: FAIL.append("lease: contended acquire should exit 3")
-        time.sleep(1.2)
-        r = run([lease, "acquire", "T-1", "--owner", "b", "--ttl", "1"])
+        run([lease, "release", "T-1", "--owner", "a"])
+        # Expiry check uses its own short-TTL lease on a separate key
+        r = run([lease, "acquire", "T-2", "--owner", "a", "--ttl", "1"])
+        if r.returncode != 0: FAIL.append("lease: short-ttl acquire should succeed")
+        time.sleep(1.3)
+        r = run([lease, "acquire", "T-2", "--owner", "b", "--ttl", "1"])
         if r.returncode != 0: FAIL.append("lease: expired lease should be reclaimable")
 
         r = run([idem, "claim", "k"])
