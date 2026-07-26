@@ -128,6 +128,10 @@ def main():
         print(json.dumps({"ok": False, "reason": "diff-error", "detail": diff_err,
                           "issue": a.issue, "base": base}))
         return 4
+    # jloop's own runtime bookkeeping (leases, idempotency records) is durable
+    # state, not part of the PR's code change — never count it as scope.
+    IGNORED = (".factory/leases/", ".factory/actions/")
+    changed = [f for f in changed if not f.startswith(IGNORED)]
     allowed = contract.get("relevant_files", [])
     protected = contract.get("protected", [])
 
