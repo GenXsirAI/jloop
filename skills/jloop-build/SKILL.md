@@ -140,6 +140,12 @@ awaiting a decision. A finished issue should carry no gate label — only its
 state. `blocked` is moot once done; the `loop-*` labels may stay as merge
 evidence.
 
+Archiving (to drop a finished issue from the Active/All view) is NOT a
+`save_issue` state — Linear archives via the GraphQL `issueArchive` mutation:
+`mutation { issueArchive(id: "TEAM-NNN", trash: false) { success } }` against
+`https://api.linear.app/graphql` with `LINEAR_API_KEY`. `gh` cannot do it (that
+is GitHub). Agents should not archive by default; leave it to a human.
+
 ## 8. Blocked
 Comment ONE specific answerable question (state the exact decision, the options,
 and which AC it affects — never "this is unclear"). Apply `blocked`, unassign,
