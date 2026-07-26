@@ -51,16 +51,32 @@ def _load_contract(issue):
     return data, None
 
 
+def _rev_exists(ref):
+    return subprocess.run(["git", "rev-parse", "--verify", "--quiet", ref],
+                          capture_output=True, text=True).returncode == 0
+
+
 def _changed_files(base_ref):
-    # files changed vs merge-base with the base branch
-    try:
-        mb = subprocess.run(["git", "merge-base", base_ref, "HEAD"],
-                            capture_output=True, text=True, check=True).stdout.strip()
-    except subprocess.CalledProcessError:
-        mb = base_ref
-    out = subprocess.run(["git", "diff", "--name-only", f"{mb}...HEAD"],
-                         capture_output=True, text=True, check=True).stdout
-    return [f for f in out.splitlines() if f.strip()]
+    """Files changed vs the merge-base with base_ref. Returns (files, error).
+
+    Never raises: a bad/missing ref or non-git dir yields ([], reason) so the
+    caller can emit a clean JSON error instead of crashing the review skill.
+    """
+    if not _rev_exists("HEAD"):
+        return [], "not a git repo or no commits (HEAD missing)"
+    if not _rev_exists(base_ref):
+        return [], f"base ref not found: {base_ref}"
+    mb = subprocess.run(["git", "merge-base", base_ref, "HEAD"],
+                        capture_output=True, text=True)
+    diff_base = mb.stdout.strip() if mb.returncode == 0 and mb.stdout.strip() else base_ref
+    r = subprocess.run(["git", "diff", "--name-only", f"{diff_base}...HEAD"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:  # fall back to two-dot, then report if still broken
+        r = subprocess.run(["git", "diff", "--name-only", diff_base, "HEAD"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            return [], f"git diff failed against {diff_base}: {r.stderr.strip()}"
+    return [f for f in r.stdout.splitlines() if f.strip()], None
 
 
 def _matches_any(path, patterns):
@@ -107,7 +123,11 @@ def main():
             base = "main"
         base = f"origin/{base}"
 
-    changed = _changed_files(base)
+    changed, diff_err = _changed_files(base)
+    if diff_err:
+        print(json.dumps({"ok": False, "reason": "diff-error", "detail": diff_err,
+                          "issue": a.issue, "base": base}))
+        return 4
     allowed = contract.get("relevant_files", [])
     protected = contract.get("protected", [])
 
