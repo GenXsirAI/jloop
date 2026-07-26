@@ -149,11 +149,22 @@ def check_verify_scope():
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="jloop self-validation")
+    ap.add_argument("--json", action="store_true",
+                    help="emit a single JSON object {ok, failures} instead of text")
+    args = ap.parse_args()
+
     check_frontmatter()
     check_scripts_exist()
     check_lease_and_idem()
     check_verify_scope()
     check_contracts()
+
+    ok = not FAIL
+    if args.json:
+        print(json.dumps({"ok": ok, "failures": FAIL}))
+        return 0 if ok else 1
     if FAIL:
         print("jloop validation FAILED:")
         for f in FAIL:
