@@ -1,5 +1,5 @@
 issue: GOL-9
-version: 1                 # bump on every spec edit; jloop review checks this matches
+version: 2                 # bump on every spec edit; jloop review checks this matches
 acceptance_criteria:
   - id: AC-1
     text: watch.py --backfill scans ~/.hermes/skills/* and ~/jloop/skills/*, lists skills with no entry in .factory/watch.yaml, asks (via clarify) for source repo URL + ref per skill, and writes the entry; already-tracked skills are skipped.
@@ -10,7 +10,7 @@ acceptance_criteria:
   - id: AC-4
     text: "On drift (HEAD != last_seen_sha OR newer semver tag), watch.py updates last_seen_* and emits structured payload (repo, old_sha, new_sha, tag_delta, commit_count_estimate) on stdout."
   - id: AC-5
-    text: "On drift, exactly ONE Linear issue is created/freshened per repo, labeled spec-waiting-approval + upstream-drift, body = jloop-spec draft pinning exact new_sha as upgrade target; idempotency.py prevents duplicates for same repo+sha."
+    text: "On drift, exactly ONE Linear issue is created/freshened per repo, labeled spec-waiting-approval, body = jloop-spec draft pinning exact new_sha as upgrade target; idempotency.py prevents duplicates for same repo+sha."
   - id: AC-6
     text: "A jloop-watch skill stub (~/.hermes/skills/jloop-watch/SKILL.md) documents on-demand runs, AND a daily Hermes cron entry runs watch.py routing output to the user."
   - id: AC-7
