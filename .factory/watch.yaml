@@ -1,0 +1,15 @@
+# jloop upstream-drift registry (GOL-9)
+#
+# Maps each GitHub-sourced skill to its provenance and the last upstream state
+# we observed. Populated by `python3 scripts/watch.py --backfill` (interactive:
+# it asks for each untracked skill's source repo + ref). watch.py then uses
+# `git ls-remote` to detect when an upstream has advanced.
+#
+# Schema per entry:
+#   name:          skill directory name
+#   path:          absolute path to the skill on this machine
+#   repo:          source git URL (https://github.com/owner/repo)
+#   ref:           the branch/tag originally pulled (e.g. main)
+#   last_seen_sha: upstream HEAD SHA at last observation (40 hex chars, quoted)
+#   last_seen_tag: newest semver tag seen, or '' if none
+skills: []

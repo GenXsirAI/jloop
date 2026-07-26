@@ -1,5 +1,5 @@
 issue: GOL-9
-version: 2                 # bump on every spec edit; jloop review checks this matches
+version: 3                 # bump on every spec edit; jloop review checks this matches
 acceptance_criteria:
   - id: AC-1
     text: watch.py --backfill scans ~/.hermes/skills/* and ~/jloop/skills/*, lists skills with no entry in .factory/watch.yaml, asks (via clarify) for source repo URL + ref per skill, and writes the entry; already-tracked skills are skipped.
@@ -28,6 +28,7 @@ non_goals:
     text: "Cron alerting uses whatever Hermes cron provides; no custom alerting service."
 relevant_files:            # paths the change is ALLOWED to touch
   - "scripts/watch.py"
+  - "tests/test_watch.py"
   - ".factory/watch.yaml"
   - ".factory/contracts/GOL-9.yaml"
   - "skills/jloop-watch/**"
