@@ -1,0 +1,49 @@
+issue: GOL-11
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: >
+      merge_signal.py STATE_LABELS is the full 6-label machine
+      (spec-waiting-approval -> approved -> build-in-progress -> build-complete
+      -> waiting-to-merge -> completed); swap_labels() preserves build-complete
+      (removes build-in-progress as it transitions to build-complete), adds
+      waiting-to-merge, leaves exactly the build-complete + waiting-to-merge pair
+      plus any non-state labels, and no stray state labels remain.
+  - id: AC-2
+    text: >
+      README.md and the repo skill files (skills/jloop-build/SKILL.md,
+      skills/jloop-review/SKILL.md, skills/jloop-spec/SKILL.md) all describe the
+      same 6-label machine; `grep -rn "four-label|closed four-label vocabulary"`
+      over the repo returns no matches.
+  - id: AC-3
+    text: >
+      tests/test_merge_signal.py gains build-phase-preservation cases:
+      (a) [approved, build-complete, Improvement] -> build-complete + waiting-to-merge + Improvement retained, approved removed;
+      (b) [approved, build-in-progress, build-complete, Improvement] -> build-in-progress removed, build-complete + waiting-to-merge + Improvement retained;
+      (c) idempotency still holds on replay. All pass.
+  - id: AC-4
+    text: >
+      python scripts/validate.py passes and both tests/test_merge_signal.py and
+      tests/test_watch.py pass after the change.
+non_goals:
+  - id: NG-1
+    text: Must not change lease.py, idempotency.py, verify_scope.py, watch.py, validate.py.
+  - id: NG-2
+    text: Must not build a skill-sync mechanism (that is D2, a separate issue).
+  - id: NG-3
+    text: Must not alter the Linear label set itself; only the code/doc vocabulary.
+relevant_files:
+  - "scripts/merge_signal.py"
+  - "tests/test_merge_signal.py"
+  - "README.md"
+  - "skills/jloop-build/SKILL.md"
+  - "skills/jloop-review/SKILL.md"
+  - "skills/jloop-spec/SKILL.md"
+protected:
+  - "scripts/lease.py"
+  - "scripts/idempotency.py"
+  - "scripts/verify_scope.py"
+  - "scripts/watch.py"
+  - "scripts/validate.py"
+  - "tests/test_watch.py"
+risk: low
