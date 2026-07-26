@@ -1,0 +1,40 @@
+issue: GOL-9
+version: 1                 # bump on every spec edit; jloop review checks this matches
+acceptance_criteria:
+  - id: AC-1
+    text: watch.py --backfill scans ~/.hermes/skills/* and ~/jloop/skills/*, lists skills with no entry in .factory/watch.yaml, asks (via clarify) for source repo URL + ref per skill, and writes the entry; already-tracked skills are skipped.
+  - id: AC-2
+    text: ".factory/watch.yaml exists with schema {skills:[{name,path,repo,ref,last_seen_sha,last_seen_tag}]}; back-fill and watch read/write only this file."
+  - id: AC-3
+    text: "watch.py run mode runs `git ls-remote <repo>` per entry, compares resolved default-branch HEAD + tags vs last_seen_sha/last_seen_tag; prints 'no drift' and exits 0 when unchanged."
+  - id: AC-4
+    text: "On drift (HEAD != last_seen_sha OR newer semver tag), watch.py updates last_seen_* and emits structured payload (repo, old_sha, new_sha, tag_delta, commit_count_estimate) on stdout."
+  - id: AC-5
+    text: "On drift, exactly ONE Linear issue is created/freshened per repo, labeled spec-waiting-approval + upstream-drift, body = jloop-spec draft pinning exact new_sha as upgrade target; idempotency.py prevents duplicates for same repo+sha."
+  - id: AC-6
+    text: "A jloop-watch skill stub (~/.hermes/skills/jloop-watch/SKILL.md) documents on-demand runs, AND a daily Hermes cron entry runs watch.py routing output to the user."
+  - id: AC-7
+    text: "Drift issue is a normal jloop-spec issue; jloop-build pulls pinned new_sha into the skill dir and verify_scope.py confirms only that skill's path changed — reuse existing gate, no new code."
+non_goals:
+  - id: NG-1
+    text: "watch.py must NOT clone/fetch upstream contents or apply any upstream diff; detection is ls-remote only; application is the build agent under the existing gate."
+  - id: NG-2
+    text: "No auto-merge, no auto-apply; the spec-waiting-approval -> human 'approved' handshake is mandatory; agents never merge."
+  - id: NG-3
+    text: "No changes to lease.py/idempotency.py/verify_scope.py internals beyond being called (reuse, don't fork)."
+  - id: NG-4
+    text: "Private-repo auth out of scope; watch relies on already-configured git credentials for ls-remote; no token handling added."
+  - id: NG-5
+    text: "Cron alerting uses whatever Hermes cron provides; no custom alerting service."
+relevant_files:            # paths the change is ALLOWED to touch
+  - "scripts/watch.py"
+  - ".factory/watch.yaml"
+  - ".factory/contracts/GOL-9.yaml"
+  - "skills/jloop-watch/**"
+  - "~/.hermes/skills/jloop-watch/**"
+protected:                 # paths/modules NG-N forbids changing (scope guard)
+  - "scripts/lease.py"
+  - "scripts/idempotency.py"
+  - "scripts/verify_scope.py"
+  - "scripts/validate.py"
+risk: medium               # low | medium | high — informs merge lane
