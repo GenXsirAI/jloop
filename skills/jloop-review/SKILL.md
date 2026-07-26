@@ -115,6 +115,11 @@ edits the issue/contract/repo config, and removes `needs-human-review` before
 jloop reviews that unchanged commit again.
 
 ## 6. Hard limits (forced merge discipline)
+- The Linear-side state machine is a closed four-label vocabulary:
+  `spec-waiting-approval → approved → waiting-to-merge → completed`. The build
+  sets `waiting-to-merge` when it opens the PR; review does not change Linear
+  state labels — it only sets the GitHub `loop-*` evidence labels below. A PR
+  whose issue is `waiting-to-merge` is expected and normal.
 - Never merge or enable auto-merge. `loop-approved` is evidence for a human, not
   authorization.
 - Never push commits to the PR branch.

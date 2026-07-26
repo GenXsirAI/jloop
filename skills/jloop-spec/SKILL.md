@@ -105,6 +105,15 @@ tiny PR (or commit to the spec branch) so the contract is version-controlled and
 reviewable alongside the code later.
 
 ## Hard rules
+- **The workflow-state label vocabulary is CLOSED — exactly four labels:**
+  `spec-waiting-approval` → `approved` → `waiting-to-merge` → `completed`. Do
+  NOT invent extra category/type labels (e.g. `upstream-drift`, `chore`) to
+  classify an issue — the title and body already say what it is, and a second
+  state label only muddies the machine. jloop-spec sets only
+  `spec-waiting-approval`; the build sets `waiting-to-merge` when it opens the
+  PR; `approved` and `completed` are human-only gates. (Pre-existing team labels
+  like `Feature`/`Improvement`/`Bug` are fine to keep; the ban is on minting
+  *new* state/classification labels.)
 - Apply `spec-waiting-approval`, but **never** apply the `approved` label. The
   human adds `approved` in Linear after a final read — that label is the
   approval gate between "idea" and "an agent builds it". The two-label handshake

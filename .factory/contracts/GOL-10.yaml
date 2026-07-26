@@ -1,0 +1,37 @@
+issue: GOL-10
+version: 2                 # bump on every spec edit; jloop review checks this matches
+acceptance_criteria:
+  - id: AC-1
+    text: "New closed-vocabulary state label 'waiting-to-merge' exists on Gold Medal Equity team (created if absent). State machine becomes exactly four: spec-waiting-approval -> approved -> waiting-to-merge -> completed."
+  - id: AC-2
+    text: "At end of a successful jloop-build pass, right after PR opens, swap state label: remove 'approved', add 'waiting-to-merge'. Only one state label present at a time; non-state labels (Feature/Improvement/Bug) untouched."
+  - id: AC-3
+    text: "In the same step, edit the Linear issue description to insert a callout block on its own line immediately below the '## Problem' section (before '## Acceptance Criteria'), reading exactly '**\u2705 Solution Ready For Merge**' followed by a markdown link to the open PR URL; clickable and resolves to the PR."
+  - id: AC-4
+    text: "Idempotent: retries do not duplicate the callout or stack multiple waiting-to-merge labels; existing callout is updated in place (PR URL refreshed). Keyed on merge-signal:<issue>."
+  - id: AC-5
+    text: "On human merge / move to Done, waiting-to-merge label is shed and completed applied (consistent with completed-issues-shed-pipeline-labels rule). Callout retention is implementer's choice, documented."
+  - id: AC-6
+    text: "jloop-build, jloop-review, jloop-spec, and agentic-build-loop skill docs updated to reflect the four-label state machine and the new post-PR signalling step."
+non_goals:
+  - id: NG-1
+    text: "Agents still NEVER merge. waiting-to-merge is a signal, not authorization; human merges. No auto-merge added."
+  - id: NG-2
+    text: "No change to scope verification, lease, or idempotency-core internals beyond adding the new merge-signal:<issue> key usage (reuse, don't fork)."
+  - id: NG-3
+    text: "Do not alter spec-waiting-approval / approved / completed semantics or who sets them (approved/completed remain human-only)."
+  - id: NG-4
+    text: "No new Linear connector/tooling; use existing issue-update + label capabilities and LINEAR_API_KEY."
+  - id: NG-5
+    text: "Callout placement is strictly below '## Problem'; do not restructure the rest of the issue body."
+relevant_files:           # globs the change is ALLOWED to touch
+  - "scripts/**"
+  - "tests/**"
+  - "skills/**"            # AC-6: update jloop-build/review/spec skill docs (repo-tracked)
+  - "README.md"           # AC-6: reflect four-state machine
+  - ".factory/contracts/GOL-10.yaml"
+protected:                # NG-2/NG-3 scope guard: reuse, don't fork these internals
+  - "scripts/lease.py"
+  - "scripts/verify_scope.py"
+  - "scripts/idempotency.py"
+risk: medium              # low | medium | high — informs merge lane
