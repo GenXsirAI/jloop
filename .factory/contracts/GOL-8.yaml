@@ -1,0 +1,31 @@
+issue: GOL-8
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: "jloop-spec applies spec-waiting-approval on every filed issue and never applies the approval label."
+  - id: AC-2
+    text: "The human approval gate label is 'approved' (replacing agent-ready)."
+  - id: AC-3
+    text: "jloop-build pick query selects approved + unassigned + not blocked + no blocker, and excludes spec-waiting-approval-only issues."
+  - id: AC-4
+    text: "jloop-build removes spec-waiting-approval on claim."
+  - id: AC-5
+    text: "README and all three SKILL.md files document the two-label flow with no agent-ready gate references."
+non_goals:
+  - id: NG-1
+    text: "Do not change any Python script under scripts/."
+  - id: NG-2
+    text: "Do not change the CI workflow or .github/**."
+  - id: NG-3
+    text: "Do not add Slack, auto-merge, or new external integrations."
+  - id: NG-4
+    text: "Do not change blocked, loop-approved, loop-changes-requested, or needs-human-review semantics."
+relevant_files:
+  - "README.md"
+  - "skills/jloop-spec/SKILL.md"
+  - "skills/jloop-build/SKILL.md"
+  - "skills/jloop-review/SKILL.md"
+protected:
+  - "scripts/**"
+  - ".github/**"
+risk: low
