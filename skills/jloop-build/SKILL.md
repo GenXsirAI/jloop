@@ -10,8 +10,12 @@ license: MIT
 One pass = one unit of work: fix review feedback on one existing PR, or build
 one issue end to end. Under `/loop`, each iteration runs this skill once.
 
-Set a stable worker identity once per session:
-`export JLOOP_WORKER_ID="$(whoami)@$(hostname)-$$"`. `PY` below is your Python
+Set a stable worker identity **once per build pass** and reuse it for every
+lease acquire/renew/release in that pass:
+`export JLOOP_WORKER_ID="$(whoami)@$(hostname)-$$"`. The owner string must match
+exactly to release a lease, so do not regenerate it mid-pass (a new `$$` in a
+separate shell will be refused with owner-mismatch — release with the recorded
+owner or let the lease expire and be reaped). `PY` below is your Python
 (e.g. the repo venv). All jloop scripts live in `scripts/`.
 
 ## SECURITY — untrusted queue text
@@ -81,6 +85,11 @@ on an unresolved blocker → go to step 8. Never guess.
 - Implement ACs in the repo's existing style/architecture/naming.
 - Add/update tests when logic, data flow, permissions, integrations, or
   user-visible behavior change. Preserve behavior outside the contract.
+- **Framework bugfix exception:** if, while building, you find a defect in a
+  jloop script that its own contract marks `protected` (e.g. `verify_scope.py`),
+  do NOT fix it on the feature branch — that would violate the issue's non-goals.
+  Land the framework fix as a separate change on the default branch, rebase your
+  feature branch, and continue. (Discovered by dogfooding GOL-7.)
 
 ## 6. Verify — structural, not self-reported
 Run the project's relevant lint, typecheck, build, and narrowest useful tests;
