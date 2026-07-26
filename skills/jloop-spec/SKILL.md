@@ -105,8 +105,7 @@ tiny PR (or commit to the spec branch) so the contract is version-controlled and
 reviewable alongside the code later.
 
 ## Hard rules
-- **The workflow-state label vocabulary is CLOSED — exactly four labels:**
-  `spec-waiting-approval` → `approved` → `waiting-to-merge` → `completed`. Do
+- **The workflow-state label vocabulary is the closed state machine:**
   NOT invent extra category/type labels (e.g. `upstream-drift`, `chore`) to
   classify an issue — the title and body already say what it is, and a second
   state label only muddies the machine. jloop-spec sets only

@@ -53,6 +53,31 @@ new3, _, rem3 = ms.swap_labels(["approved", "spec-waiting-approval", "Bug"])
 ok("swap: strips stray spec-waiting-approval", "spec-waiting-approval" not in new3 and "spec-waiting-approval" in rem3)
 ok("swap: still one state label", sum(l in ms.STATE_LABELS for l in new3) == 1)
 
+# --- GOL-11: build-phase preservation (6-label closed vocabulary) ---
+# 3b. [approved, build-complete, Improvement] -> build-complete + waiting-to-merge
+#     retained, approved removed, Improvement preserved (AC-3a)
+new4, add4, rem4 = ms.swap_labels(["approved", "build-complete", "Improvement"])
+ok("swap(GOL-11): build-complete preserved", "build-complete" in new4)
+ok("swap(GOL-11): waiting-to-merge added", "waiting-to-merge" in new4)
+ok("swap(GOL-11): approved removed", "approved" not in new4)
+ok("swap(GOL-11): Improvement preserved", "Improvement" in new4)
+ok("swap(GOL-11): no stray state label", sum(l in ms.STATE_LABELS for l in new4) == 2)
+ok("swap(GOL-11): build-complete listed in removed? NO", "build-complete" not in rem4)
+ok("swap(GOL-11): approved listed in removed", "approved" in rem4)
+
+# 3c. [approved, build-in-progress, build-complete, Improvement] -> build-in-progress
+#     removed (transient), build-complete + waiting-to-merge retained (AC-3b)
+new5, add5, rem5 = ms.swap_labels(["approved", "build-in-progress", "build-complete", "Improvement"])
+ok("swap(GOL-11): build-in-progress dropped", "build-in-progress" not in new5 and "build-in-progress" in rem5)
+ok("swap(GOL-11): build-complete retained w/ build-in-progress present", "build-complete" in new5)
+ok("swap(GOL-11): waiting-to-merge present", "waiting-to-merge" in new5)
+ok("swap(GOL-11): Improvement preserved (transient case)", "Improvement" in new5)
+
+# 3d. idempotent replay keeps the same final pair (AC-3c)
+new6, add6, _ = ms.swap_labels(new5)
+ok("swap(GOL-11): replay is stable (no re-add)", add6 == [] and new6 == new5)
+ok("swap(GOL-11): replay still 2 state labels", sum(l in ms.STATE_LABELS for l in new6) == 2)
+
 # 4. callout inserted right below ## Problem, before next heading
 desc = "## Problem\n\nThe thing is broken.\n\n## Acceptance Criteria\n\n- [ ] AC-1\n"
 out = ms.insert_callout(desc, URL)

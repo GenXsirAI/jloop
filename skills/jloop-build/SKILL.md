@@ -144,11 +144,6 @@ $PY scripts/merge_signal.py plan TEAM-NNN --url "<pr_url>" \
   Merge**` callout linking the PR, directly under `## Problem`).
 - **Exit 3** → already signalled for this issue; do nothing (idempotent).
 
-The four-label state machine is a **closed vocabulary**:
-`spec-waiting-approval → approved → waiting-to-merge → completed`. `approved`
-and `completed` remain human-only; `waiting-to-merge` is a signal set by the
-build, never authorization — agents still never merge.
-
 Release the lease
 (`$PY scripts/lease.py release TEAM-NNN --owner "$JLOOP_WORKER_ID"`) and end.
 
@@ -156,8 +151,8 @@ Release the lease
 When the issue reaches the completed state (`Done`) — whether a human marks it
 after merging your PR, or you do — **strip the state/gate labels**
 `spec-waiting-approval`, `approved`, `waiting-to-merge`, and `agent-ready`, and
-apply `completed`. The full state machine is a closed four-label vocabulary:
-`spec-waiting-approval → approved → waiting-to-merge → completed`. The first
+apply `completed`. The full state machine is a closed six-label vocabulary:
+`spec-waiting-approval → approved → build-in-progress → build-complete → waiting-to-merge → completed`. The first
 three are pipeline signals (spec drafted / human approved to build / built and
 awaiting merge) that mean nothing once the work is done; leaving them on makes a
 completed issue look like it is still in the pipeline. A finished issue should
