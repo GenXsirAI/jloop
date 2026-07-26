@@ -95,10 +95,64 @@ def check_contracts():
                 FAIL.append(f"{c}: missing key '{key}'")
 
 
+def check_verify_scope():
+    """Functional regression for verify_scope.py: in-scope pass, out-of-scope
+    violation, and graceful clean-JSON error on a bad base ref."""
+    vs = ROOT / "scripts" / "verify_scope.py"
+    if not vs.exists():
+        FAIL.append("missing script: scripts/verify_scope.py"); return
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        for d in ("src/board", "src/auth", ".factory/contracts"):
+            (td / d).mkdir(parents=True)
+        (td / ".factory/contracts/ENG-9.yaml").write_text(
+            "issue: ENG-9\nversion: 1\n"
+            "acceptance_criteria: [{id: AC-1, text: board}]\n"
+            "non_goals: [{id: NG-1, text: no auth}]\n"
+            'relevant_files: ["src/board/**"]\n'
+            'protected: ["src/auth/**"]\nrisk: low\n')
+        g = lambda *a: subprocess.run(["git", *a], cwd=td, capture_output=True, text=True)
+        g("init", "-qb", "main"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
+        (td / "src/board/board.ts").write_text("base\n"); g("add", "-A"); g("commit", "-qm", "base")
+        g("switch", "-qc", "ENG-9-board")
+
+        def run():
+            return subprocess.run([sys.executable, str(vs), "ENG-9", "--base", "main"],
+                                  cwd=td, capture_output=True, text=True)
+
+        # 1. in-scope -> exit 0, valid JSON, ok:true
+        (td / "src/board/board.ts").write_text("base\nmore\n"); g("add", "-A"); g("commit", "-qm", "in")
+        r = run()
+        try:
+            if r.returncode != 0 or not json.loads(r.stdout)["ok"]:
+                FAIL.append("verify_scope: in-scope change should pass (exit 0, ok:true)")
+        except (json.JSONDecodeError, KeyError):
+            FAIL.append(f"verify_scope: in-scope produced non-JSON: {r.stdout[:80]!r}")
+        # 2. out-of-scope (protected path) -> exit 2, violations present
+        (td / "src/auth/login.ts").write_text("sneaky\n"); g("add", "-A"); g("commit", "-qm", "creep")
+        r = run()
+        try:
+            if r.returncode != 2 or json.loads(r.stdout)["ok"]:
+                FAIL.append("verify_scope: protected-path change should fail (exit 2)")
+        except (json.JSONDecodeError, KeyError):
+            FAIL.append(f"verify_scope: violation produced non-JSON: {r.stdout[:80]!r}")
+        # 3. bad base ref -> exit 4, clean JSON, no crash/stderr
+        r = subprocess.run([sys.executable, str(vs), "ENG-9", "--base", "no-such-ref"],
+                           cwd=td, capture_output=True, text=True)
+        try:
+            if r.returncode != 4 or json.loads(r.stdout).get("reason") != "diff-error":
+                FAIL.append("verify_scope: bad ref should exit 4 with diff-error JSON")
+            if r.stderr.strip():
+                FAIL.append(f"verify_scope: bad ref leaked stderr: {r.stderr[:80]!r}")
+        except json.JSONDecodeError:
+            FAIL.append(f"verify_scope: bad ref crashed instead of clean JSON: {r.stdout[:80]!r}")
+
+
 def main():
     check_frontmatter()
     check_scripts_exist()
     check_lease_and_idem()
+    check_verify_scope()
     check_contracts()
     if FAIL:
         print("jloop validation FAILED:")
