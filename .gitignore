@@ -1,0 +1,8 @@
+# jloop runtime state — leases and idempotency records are committed intentionally
+# (see README "Durable state"). Only ignore local scratch.
+*.tmp
+*.pyc
+__pycache__/
+.DS_Store
+.venv/
+venv/

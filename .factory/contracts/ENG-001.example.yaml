@@ -1,0 +1,19 @@
+issue: ENG-001
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: "The /board endpoint returns tasks grouped by status as JSON."
+  - id: AC-2
+    text: "An empty board returns 200 with an empty groups array, not 404."
+non_goals:
+  - id: NG-1
+    text: "Do not change authentication or session handling."
+  - id: NG-2
+    text: "Do not alter the database schema or run migrations."
+relevant_files:
+  - "src/board/**"
+  - "src/api/board*.ts"
+protected:
+  - "src/auth/**"
+  - "migrations/**"
+risk: low
