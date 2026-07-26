@@ -1,0 +1,24 @@
+issue: GOL-7
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: "python scripts/validate.py --json prints a single JSON object with keys ok (bool) and failures (array), and nothing else on stdout."
+  - id: AC-2
+    text: "Exit code preserved: 0 when ok, 1 when not, in both default and --json modes."
+  - id: AC-3
+    text: "Default human-readable output is unchanged."
+non_goals:
+  - id: NG-1
+    text: "Do not change any check logic in validate.py."
+  - id: NG-2
+    text: "Do not modify lease.py, idempotency.py, or verify_scope.py."
+  - id: NG-3
+    text: "Do not change the CI workflow."
+relevant_files:
+  - "scripts/validate.py"
+protected:
+  - "scripts/lease.py"
+  - "scripts/idempotency.py"
+  - "scripts/verify_scope.py"
+  - ".github/**"
+risk: low
