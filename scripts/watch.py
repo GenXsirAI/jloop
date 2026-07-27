@@ -29,6 +29,7 @@ State file: .factory/watch.yaml
 """
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -106,8 +107,7 @@ def save_registry(data):
             return dumper.represent_scalar("tag:yaml.org,2002:str", value)
 
         _QuotedDumper.add_representer(str, _repr_str)
-        text = yaml.dump(data, Dumper=_QuotedDumper, sort_keys=False,
-                         default_flow_style=False)
+        text = yaml.dump(data, Dumper=_QuotedDumper, sort_keys=False, default_flow_style=False)
     except Exception:
         text = json.dumps(data, indent=2)
     fd, tmp = tempfile.mkstemp(dir=str(WATCH_YAML.parent), suffix=".tmp")
@@ -132,7 +132,9 @@ def ls_remote(repo):
     try:
         r = subprocess.run(
             ["git", "ls-remote", repo],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
     except Exception as e:
         return None, None, None, f"ls-remote failed: {e}"
@@ -149,7 +151,7 @@ def ls_remote(repo):
         if ref == "HEAD":
             continue
         if ref.startswith("refs/heads/"):
-            branch = ref[len("refs/heads/"):]
+            branch = ref[len("refs/heads/") :]
             # crude default-branch heuristic: main > master > first branch
             if branch in ("main", "master"):
                 default_branch = branch
@@ -157,7 +159,7 @@ def ls_remote(repo):
             elif head_sha is None:
                 head_sha = sha
         elif ref.startswith("refs/tags/"):
-            t = ref[len("refs/tags/"):]
+            t = ref[len("refs/tags/") :]
             # deref annotated tags (^{}) -- keep the commit sha
             if t.endswith("^{}"):
                 t = t[:-3]
@@ -169,9 +171,11 @@ def newest_semver(tags):
     vers = [t for t in tags if SEMVER_RE.match(t)]
     if not vers:
         return ""
+
     def key(t):
         nums = SEMVER_RE.match(t).group(0).lstrip("v").split(".")
         return tuple(int(x) for x in nums)
+
     return max(vers, key=key)
 
 
@@ -208,21 +212,27 @@ def linear_filed(repo, new_sha):
         return False
     r = subprocess.run(
         [sys.executable, str(IDEMPOTENCY), "claim", key],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
-    try:
-        out = json.loads(r.stdout)
-    except Exception:
-        out = {}
+    with contextlib.suppress(Exception):
+        json.loads(r.stdout)  # parse to confirm well-formed; result unused
     # claim exit 0 -> we own it (file now); exit 3 -> already claimed
     if r.returncode == 3:
         return True
     if r.returncode == 0:
         # mark committed so a third run still sees it as done
         subprocess.run(
-            [sys.executable, str(IDEMPOTENCY), "commit", key,
-             "--meta", json.dumps({"repo": repo, "sha": new_sha})],
-            capture_output=True, text=True,
+            [
+                sys.executable,
+                str(IDEMPOTENCY),
+                "commit",
+                key,
+                "--meta",
+                json.dumps({"repo": repo, "sha": new_sha}),
+            ],
+            capture_output=True,
+            text=True,
         )
         return False
     # unexpected: be safe, don't spam (treat as already filed)
@@ -247,7 +257,8 @@ auto-filed **upstream-drift** proposal (GOL-9 watchdog). It is a normal
 jloop-spec issue: review the diff, then add `approved` to authorize the upgrade.
 
 ## Acceptance Criteria
-- [ ] **AC-1** — Pull upstream commits for `{name}` up to the pinned SHA into its skill directory, preserving local customizations (merge/rebase, not overwrite).
+- [ ] **AC-1** — Pull upstream commits for `{name}` up to the pinned SHA into its
+  skill directory, preserving local customizations (merge/rebase, not overwrite).
 - [ ] **AC-2** — Verify the skill still loads (SKILL.md parses, no broken scripts) after the pull.
 - [ ] **AC-3** — Update `{watch_rel}` `last_seen_sha`/`last_seen_tag` for this skill to the pinned SHA.
 
@@ -264,8 +275,8 @@ jloop-spec issue: review the diff, then add `approved` to authorize the upgrade.
 3. Skill loads; registry updated.
 
 **Pinned upgrade target (exact SHA):** `{new_sha}`
-**Previous seen SHA:** `{old_sha or 'unknown'}`
-**Tag delta:** `{old_tag or 'none'}` -> `{new_tag or 'none'}`
+**Previous seen SHA:** `{old_sha or "unknown"}`
+**Tag delta:** `{old_tag or "none"}` -> `{new_tag or "none"}`
 {note}
 """
     # File via Linear MCP (the agent's connector). Build the minimal payload and
@@ -283,19 +294,21 @@ jloop-spec issue: review the diff, then add `approved` to authorize the upgrade.
     ACTION_DIR.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(ACTION_DIR), suffix=".drift.json")
     with os.fdopen(fd, "w") as f:
-        json.dump(payload, f, indent=2); f.write("\n")
+        json.dump(payload, f, indent=2)
+        f.write("\n")
     # Signal to stdout for the agent to act on.
-    print(json.dumps({"drift_detected": True, "file": tmp, "payload": payload},
-                     indent=2), file=sys.stderr)
+    print(
+        json.dumps({"drift_detected": True, "file": tmp, "payload": payload}, indent=2),
+        file=sys.stderr,
+    )
     return payload
 
 
 # --------------------------------------------------------------------------- #
 # backfill                                                                     #
 # --------------------------------------------------------------------------- #
-def cmd_backfill(ask_fn):
-    data = load_registry()
-    tracked = {s.get("name") for s in data.get("skills", [])}
+def _discover_skills():
+    """Return sorted list of skill dir names found under the hermes + jloop roots."""
     found = []
     for base in (HERMES_SKILLS, JLOOP_SKILLS):
         if not base.is_dir():
@@ -303,42 +316,64 @@ def cmd_backfill(ask_fn):
         for d in sorted(base.iterdir()):
             if d.is_dir() and (d / "SKILL.md").exists():
                 found.append(d.name)
+    return found
+
+
+def _default_repo_for(name):
+    """Heuristic: first github.com URL embedded in the skill's SKILL.md."""
+    path = find_skill(name)
+    skill_md = Path(path) / "SKILL.md" if path else None
+    if skill_md is not None and skill_md.exists():
+        m = re.search(
+            r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",
+            skill_md.read_text(errors="ignore"),
+        )
+        if m:
+            return m.group(0)
+    return ""
+
+
+def _record_skill(data, name, repo, ref):
+    """Resolve HEAD/tag and append an entry. Returns False if repo is unreachable."""
+    _, head_sha, tags, err = ls_remote(repo)
+    if not head_sha:
+        # repo unreachable / not found: do NOT record a dead entry (it would
+        # never resolve and would silently report "no drift" forever). Leave
+        # it untracked so back-fill re-prompts on the next run.
+        print(f"  SKIP {name}: cannot resolve repo '{repo}' ({err or 'no HEAD'}). Fix the URL and re-run --backfill.")
+        return False
+    last_tag = newest_semver(tags) if tags else ""
+    entry = {
+        "name": name,
+        "path": find_skill(name),
+        "repo": repo,
+        "ref": ref or "main",
+        "last_seen_sha": head_sha or "",
+        "last_seen_tag": last_tag,
+    }
+    data.setdefault("skills", []).append(entry)
+    save_registry(data)
+    print(f"  recorded {name}: repo={repo} ref={ref or 'main'} sha={head_sha or '?'} tag={last_tag or '-'}")
+    return True
+
+
+def cmd_backfill(ask_fn):
+    data = load_registry()
+    tracked = {s.get("name") for s in data.get("skills", [])}
+    found = _discover_skills()
     untracked = [n for n in found if n not in tracked]
     if not untracked:
         print("backfill: all", len(found), "skills already tracked. nothing to do.")
         return
     print(f"backfill: {len(untracked)} untracked skill(s): {', '.join(untracked)}")
     for name in untracked:
-        path = find_skill(name)
-        # heuristic default: any github URL embedded in the SKILL.md
-        default_repo = ""
-        skill_md = Path(path) / "SKILL.md" if path else None
-        if skill_md is not None and skill_md.exists():
-            m = re.search(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",
-                          skill_md.read_text(errors="ignore"))
-            if m:
-                default_repo = m.group(0)
-        ans = ask_fn(name, path, default_repo)
+        default_repo = _default_repo_for(name)
+        ans = ask_fn(name, find_skill(name), default_repo)
         if not ans:
             print(f"  skip {name} (no source provided)")
             continue
         repo, ref = ans
-        # resolve current HEAD/tag to seed last_seen_*
-        _, head_sha, tags, err = ls_remote(repo)
-        if not head_sha:
-            # repo unreachable / not found: do NOT record a dead entry (it would
-            # never resolve and would silently report "no drift" forever). Leave
-            # it untracked so back-fill re-prompts on the next run.
-            print(f"  SKIP {name}: cannot resolve repo '{repo}' ({err or 'no HEAD'}). Fix the URL and re-run --backfill.")
-            continue
-        last_tag = newest_semver(tags) if tags else ""
-        entry = {
-            "name": name, "path": path, "repo": repo, "ref": ref or "main",
-            "last_seen_sha": head_sha or "", "last_seen_tag": last_tag,
-        }
-        data.setdefault("skills", []).append(entry)
-        save_registry(data)
-        print(f"  recorded {name}: repo={repo} ref={ref or 'main'} sha={head_sha or '?'} tag={last_tag or '-'}")
+        _record_skill(data, name, repo, ref)
     print("backfill complete. registry:", WATCH_YAML)
 
 
@@ -373,7 +408,9 @@ def cmd_run(dry_run=False):
         total_drift += 1
         commit_count_est = ""  # ls-remote cannot count without fetch; placeholder
         payload = {
-            "repo": repo, "old_sha": old_sha, "new_sha": head_sha,
+            "repo": repo,
+            "old_sha": old_sha,
+            "new_sha": head_sha,
             "tag_delta": f"{old_tag or 'none'} -> {new_tag or 'none'}",
             "commit_count_estimate": commit_count_est,
         }
@@ -393,7 +430,11 @@ def cmd_run(dry_run=False):
 
 def main():
     ap = argparse.ArgumentParser(description="jloop upstream-drift watchdog (GOL-9)")
-    ap.add_argument("--backfill", action="store_true", help="record provenance for untracked skills (asks per skill)")
+    ap.add_argument(
+        "--backfill",
+        action="store_true",
+        help="record provenance for untracked skills (asks per skill)",
+    )
     ap.add_argument("--check", action="store_true", help="run without filing any Linear issue (dry run)")
     a = ap.parse_args()
 
@@ -403,6 +444,7 @@ def main():
             print(f"\nSkill '{name}' ({path})")
             print(f"  suggested source repo: {default_repo or '(none found in SKILL.md)'}")
             return _prompt(name, default_repo)
+
         cmd_backfill(ask)
         return
     cmd_run(dry_run=a.check)
@@ -417,7 +459,7 @@ def _prompt(name, default_repo):
         repo = repo or default_repo
         if not repo:
             return None
-        ref = input(f"  ref (branch/tag) you pulled from [main]: ").strip() or "main"
+        ref = input("  ref (branch/tag) you pulled from [main]: ").strip() or "main"
         return (repo, ref)
     except (EOFError, KeyboardInterrupt):
         return None

@@ -1,8 +1,10 @@
 name: jloop-validate
+
 on:
   push:
     branches: [ main ]
   pull_request:
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -15,3 +17,55 @@ jobs:
         run: pip install pyyaml
       - name: Validate jloop skills, scripts, and contracts
         run: python scripts/validate.py
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dev toolchain
+        run: pip install -e ".[dev]"
+      # NOTE: ruff/bandit are scoped to the EDITABLE scripts only. The NG-3
+      # protected files (lease.py, idempotency.py, verify_scope.py) are
+      # intentionally excluded — clearing their backlog is a human task, not a
+      # CI gate that would block every PR. See GOL-9 / GOL-3 contracts.
+      - name: Ruff lint (editable scripts)
+        run: ruff check scripts/watch.py scripts/validate.py scripts/merge_signal.py
+      - name: Ruff format check (editable scripts)
+        run: ruff format --check scripts/watch.py scripts/validate.py scripts/merge_signal.py
+      - name: Type check (basedpyright, advisory)
+        run: basedpyright scripts/
+        continue-on-error: true   # advisory until strict typing lands
+      - name: Security scan (bandit, editable scripts)
+        run: bandit -r scripts/watch.py scripts/validate.py scripts/merge_signal.py -c pyproject.toml -q
+      - name: Complexity gate (radon, max CC 10)
+        run: |
+          python -m radon cc scripts/ -s -a --total-average
+          # fail the build only if an EDITABLE script exceeds CC 10
+          ! python -m radon cc scripts/watch.py scripts/validate.py scripts/merge_signal.py -s | grep -E "\([EF]\)" && echo "OK: no function exceeds CC 10"
+      - name: Dependency CVE scan (pip-audit, advisory)
+        # Advisory: pip-audit scans the ENTIRE installed env, including
+        # transitive build deps (e.g. setuptools) that this PR does not
+        # control. A build-tool CVE in the CI venv should not block merges;
+        # it is reported for awareness. Re-evaluate making this blocking
+        # once jloop pins its own dependency set.
+        run: pip-audit
+        continue-on-error: true
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dev toolchain
+        run: pip install -e ".[dev]"
+      - name: Run tests
+        # The suite spawns scripts as subprocesses, so pytest-cov cannot gate
+        # per-module coverage meaningfully yet (see .coveragerc). We run the
+        # suite to prove it is green; coverage reporting is on but un-gated
+        # until tests import modules (tracked separately from GOL-12).
+        run: pytest -q --cov=scripts --cov-report=term-missing

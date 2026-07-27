@@ -1,0 +1,16 @@
+[run]
+branch = true
+# NOTE: the jloop test suite exercises scripts by spawning them as
+# subprocesses (subprocess.run([sys.executable, "scripts/foo.py"], ...)),
+# not by importing them. pytest-cov therefore cannot trace them when scoped
+# via `source =`; it only measures them under --cov=scripts (whole dir),
+# which pulls in 0%-covered files (validate.py, verify_scope.py, protected
+# lease.py / idempotency.py) and lands the repo at ~30%. A meaningful coverage
+# gate requires converting tests to import the modules (or adding tests for the
+# uncovered files) — tracked separately, NOT in GOL-12. For now the test job
+# runs pytest and proves the suite is green; coverage is reported but not gated.
+omit =
+    .factory/*
+
+[report]
+show_missing = true
