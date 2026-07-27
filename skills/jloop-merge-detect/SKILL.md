@@ -38,6 +38,26 @@ skill never merges, never enables auto-merge. `waiting-to-merge` is cleared as
 stale signal; `done` is only *recorded* here (the human already merged) —
 it grants no merge authorization.
 
+## ⚠️ AGENT CHECKLIST — the labels are NOT auto-applied
+This is the #1 recurring failure: a PR gets merged but the Linear issue stays
+"In Progress" / "waiting-to-merge" forever, because **no webhook or cron applies
+the labels**. The `merge_detect.py plan` / `merge_signal.py plan` scripts only
+**EMIT** an idempotent payload (JSON under `.factory/actions/`); **applying it is
+a separate Linear MCP `save_issue(labels=[...])` call the agent must make.**
+
+Rule: a PR being on `origin/main` does NOT mean the issue is done. After ANY of
+these, verify the Linear labels are correct via `get_issue`:
+- **PR opened** for GOL-NN → run `merge_signal.py plan GOL-NN --url <pr>` and
+  apply: add `build-complete` + `waiting-to-merge` (issue: In Progress →
+  build-complete + waiting-to-merge).
+- **PR merged** (`gh pr view <n> --json state` = MERGED) → run
+  `merge_detect.py plan GOL-NN --url <pr> --labels <current>` and apply: drop
+  `waiting-to-merge`, add `done`; also add the `merged` signal label. End state:
+  `done` + `merged` (+ `build-complete` kept as record + type label e.g.
+  `Improvement`).
+- If you forget at merge time, this skill's `plan` mode can be run later
+  (idempotent) to catch up — but do not leave it for the human to notice.
+
 ## How to run (you are the operator)
 ```bash
 cd ~/jloop

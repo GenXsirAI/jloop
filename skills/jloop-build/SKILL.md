@@ -147,17 +147,33 @@ $PY scripts/merge_signal.py plan TEAM-NNN --url "<pr_url>" \
 Release the lease
 (`$PY scripts/lease.py release TEAM-NNN --owner "$JLOOP_WORKER_ID"`) and end.
 
-## 9. Close-out (when the work is finished)
-When the issue reaches the completed state (`Done`) — whether a human marks it
-after merging your PR, or you do — **strip the state/gate labels**
-`spec-waiting-approval`, `approved`, `waiting-to-merge`, and `agent-ready`, and
-apply `completed`. The full state machine is a closed six-label vocabulary:
-`spec-waiting-approval → approved → build-in-progress → build-complete → waiting-to-merge → completed`. The first
-three are pipeline signals (spec drafted / human approved to build / built and
-awaiting merge) that mean nothing once the work is done; leaving them on makes a
-completed issue look like it is still in the pipeline. A finished issue should
-carry only `completed`. `blocked` is moot once done; the `loop-*` GitHub labels
-may stay as merge evidence.
+## 9. Close-out (post-merge — AGENT MUST DO THIS, do not wait for the human)
+When the PR is merged (`gh pr view <n> --json state` = `MERGED`), the issue is
+NOT automatically updated. **You must run the merge-detection step and apply it:**
+```bash
+# emits an idempotent payload (drops waiting-to-merge, adds done)
+$PY scripts/merge_detect.py plan TEAM-NNN --url "<pr_url>" \
+  --labels '<current issue labels JSON>' --description-file <issue_body_file>
+```
+- **Exit 0** → apply the emitted payload via the Linear connector: remove
+  `waiting-to-merge`, add `done`, set the description to `new_description`
+  (callout becomes `**✅ Merged / Complete**`). Also add the `merged` signal
+  label (separate from `done` — it records the PR actually merged). Keep
+  `build-complete` as the implementation-done record and any type label
+  (`Feature`/`Improvement`/`Bug`).
+- **Exit 3** → already detected; skip (idempotent).
+Final labels: `done` + `merged` (+ `build-complete` + type label). Verify with
+`get_issue` — a PR on `origin/main` does NOT mean the issue is done.
+
+When the issue reaches the done state (`Done`) — **strip the stale pipeline
+labels** `spec-waiting-approval`, `approved`, `waiting-to-merge`, and
+`agent-ready`; the remaining state label `build-complete` is kept as a record of
+the shipped implementation. The full six-label vocabulary:
+`spec-waiting-approval → approved → build-in-progress → build-complete → waiting-to-merge → done`.
+The first three are pipeline signals that mean nothing once the work is done;
+leaving `waiting-to-merge` on a merged issue is the #1 recurring bug — always
+clear it. A finished issue carries `done` + `merged` (+ `build-complete` + type)
+and optional `loop-*` GitHub labels as merge evidence.
 
 Archiving (to drop a finished issue from the Active/All view) is NOT a
 `save_issue` state — Linear archives via the GraphQL `issueArchive` mutation:
