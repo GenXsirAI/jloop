@@ -11,15 +11,16 @@ cannot silently exceed the contract.
 idea → /jloop-spec  (interviews you → files a Linear issue + a machine-readable contract, labels it spec-waiting-approval)
       → you add the `approved` label          ← the one human approval gate
       → /jloop-build (leases the issue → implements only its contract → opens ONE PR → labels it waiting-to-merge + posts a "Solution Ready For Merge" callout on the issue)
-      → /jloop-review(graph-verifies scope + required CI → posts a verdict + label)
+      → /jloop-review(graph-verified scope + required CI → posts a verdict + label)
       → you merge                            ← agents never merge
+      → /jloop-merge-detect (detects the merge → flips the callout to "Merged / Complete" + clears waiting-to-merge)
 ```
 
 The Linear state machine is a **closed six-label vocabulary**:
-`spec-waiting-approval → approved → build-in-progress → build-complete → waiting-to-merge → completed`. Agents set
+`spec-waiting-approval → approved → build-in-progress → build-complete → waiting-to-merge → done`. Agents set
 `spec-waiting-approval` (spec) and `build-complete` + `waiting-to-merge` (PR opened); `approved`
-and `completed` are human-only gates. On completion, all pipeline labels are
-stripped and only `completed` remains.
+and `done` are human-only gates. `merged` is a separate signal set once the PR is actually merged. On completion, all pipeline labels are
+stripped and only `done` remains.
 
 jloop is a from-scratch reimplementation inspired by the ideas in
 [finna/Finn-loop](https://github.com/finna/Finn-loop), redesigned to fix its
@@ -44,9 +45,12 @@ runtime services** and no vendor lock beyond Linear/GitHub.
 skills/jloop-spec/SKILL.md     # interview → Linear issue + .factory contract
 skills/jloop-build/SKILL.md    # lease → implement contract → one PR
 skills/jloop-review/SKILL.md   # graph-verified scope + CI gates → verdict
-scripts/lease.py               # atomic, expiring, renewable claim lock
+skills/jloop-watch/SKILL.md    # GOL-9 upstream-drift watchdog (on-demand)
+skills/jloop-merge-detect/SKILL.md  # GOL-12 merged-PR detector (on-demand / cron)
 scripts/idempotency.py         # exactly-once external side effects
 scripts/verify_scope.py        # contract vs. real diff + graph blast radius
+scripts/merge_signal.py        # GOL-10: PR-opened finalize (Solution Ready For Merge callout)
+scripts/merge_detect.py        # GOL-12: merged-PR detect (flips callout to Merged / Complete)
 scripts/validate.py            # CI + local self-test
 .factory/contracts/<ISSUE>.yaml  # machine-readable, enforceable contract
 .factory/leases/<ISSUE>.json     # durable claim state (committed)
@@ -76,10 +80,33 @@ worker and to CI. Only local scratch is gitignored.
    into the target repo.
 2. Replace the `TEAM` placeholder in the skills with your Linear team key.
 3. Create labels idempotently — Linear: `spec-waiting-approval`, `approved`,
-   `waiting-to-merge`, `completed`, `blocked`; GitHub: `loop-approved`,
+   `waiting-to-merge`, `done`, `merged`, `blocked`; GitHub: `loop-approved`,
    `loop-changes-requested`, `needs-human-review`.
 4. Export a worker identity: `export JLOOP_WORKER_ID="$(whoami)@$(hostname)-$$"`.
 5. Run `python scripts/validate.py` — it must print `jloop validation OK`.
+
+### Via `npx skills` (recommended)
+
+The toolkit is published as a skill repo, so you can install every `jloop*`
+skill in one shot with the Vercel [`skills`](https://skills.sh) CLI (note the
+**plural** `skills` — `npx skill add` singular is the wrong, inert package):
+
+```bash
+# Generic — installs into the detected agent (Claude Code, Cursor, Hermes, …)
+npx skills add GenXsirAI/jloop
+
+# Hermes specifically (non-interactive, skips the universal-agent prompt noise)
+npx skills add GenXsirAI/jloop -a hermes-agent -g -y
+```
+
+This fetches the repo and copies each `skills/jloop*/SKILL.md` into your agent's
+skills directory (`~/.hermes/skills/` for the `-a hermes-agent` form). Scripts
+and `.factory/` still need to live in the **target repo** you run jloop against,
+so complete steps 2–5 above afterward.
+
+> **Note:** Hermes caches its skill index at session start. A skill installed
+> mid-session will not appear in `skills_list()` until you open a **new chat** —
+> verify it loaded with `skill_view(name='jloop')`.
 
 ## Daily rhythm
 
@@ -91,7 +118,10 @@ worker and to CI. Only local scratch is gitignored.
 3. Merge only PRs that are `loop-approved`, conflict-free, green on required
    checks, and still at the reviewed SHA. `needs-human-review` means read and
    resolve the escalation first.
-4. Answer `blocked` issues, remove the label, and the work requeues.
+4. Run `/jloop-merge-detect` (or let its cron) once a PR is merged — it flips the
+   issue's "Solution Ready For Merge" callout to "Merged / Complete" and clears
+   the `waiting-to-merge` signal. `done` stays a human-only gate.
+5. Answer `blocked` issues, remove the label, and the work requeues.
 
 ## The rules that make it work
 
@@ -102,11 +132,11 @@ worker and to CI. Only local scratch is gitignored.
   **graph-enforced**. Only editing the issue *and bumping the contract version*
   can change scope.
 - Blocked issues and escalated PRs leave the automated queue until a human acts.
-- On completion (`Done`/completed state), **strip the queue labels**
+- On completion (`Done`/done state), **strip the queue labels**
   `spec-waiting-approval`, `approved`, and `agent-ready`. They are pipeline
   signals (spec drafted / human-approved-to-build) that mean nothing once the
-  work is finished; leaving them on makes a completed issue look like it is
-  still awaiting a decision. A completed issue should carry no approval-gate
+  work is finished; leaving them on makes a done issue look like it is
+  still awaiting a decision. A done issue should carry no approval-gate
   label — only a state. (Discovered when GOL-7/GOL-8 kept their gate labels
   after being marked Done.)
 - Agents never merge or enable auto-merge. `loop-approved` is evidence, not
