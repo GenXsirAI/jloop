@@ -17,8 +17,9 @@ Runs `python3 scripts/watch.py` from the jloop repo root. For every skill in
 NG-1) and compares the upstream HEAD + tags against the `last_seen_*` values.
 If upstream advanced, it files ONE gated jloop-spec issue per repo
 (`spec-waiting-approval`), pinning the exact new SHA. The human adds `approved`,
-and the normal jloop-build pipeline performs the upgrade. Nothing is applied
-automatically.
+and the normal jloop-build pipeline performs the upgrade — driving the issue
+through `build-in-progress` → `build-complete` (+ `waiting-to-merge`) →
+`done`. Nothing is applied automatically. (Terminal label renamed `completed` → `done`; `merged` is a separate signal label added when the PR actually merges.)
 
 ## How to run (you are the operator)
 ```bash

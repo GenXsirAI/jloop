@@ -1,7 +1,11 @@
 ---
 name: jloop-build
 description: Claim the next approved Linear issue with an atomic lease, implement only its contract, and open exactly one PR. Use to run jloop's builder or fix jloop review feedback. Designed for /loop; one pass does one unit of work.
-version: 1.0.0
+version: 1.1.0
+# 1.1.0 — step 7 finalize must run merge_signal.py plan and apply BOTH the label
+#          and new_description payloads atomically (callout was silently dropped
+#          when set manually — session 1efa6b); verify callout present before
+#          releasing lease. §9: Linear API key uses NO "Bearer" prefix (session 9f4ab0).
 license: MIT
 ---
 
@@ -66,7 +70,8 @@ $PY scripts/lease.py acquire TEAM-NNN --owner "$JLOOP_WORKER_ID"
 - **Exit 0** → you own it. Then assign yourself in Linear, move the issue to
   the team's started state (prefer `In Progress`), and remove the
   `spec-waiting-approval` label (the spec is no longer waiting once you build it;
-  leave `approved` in place). Re-fetch; if it became blocked / reassigned / no
+  leave `approved` in place), and add the `build-in-progress` label to signal the
+  build has started. Re-fetch; if it became blocked / reassigned / no
   longer `approved`, release the lease and return to step 2.
 - Commit the new `.factory/leases/TEAM-NNN.json` so the claim is durable and
   visible. Renew the lease periodically during long work:
@@ -126,60 +131,41 @@ If `Other behavior changes: None` is not true, stop and get the Linear issue
 amended (and contract `version` bumped) before opening the PR.
 
 Comment the PR URL on the issue (idempotency-guarded:
-`comment:TEAM-NNN:pr-url:<sha>`). Move the issue to the review state if one
-exists. **Never merge, never enable auto-merge.**
-
-### 7a. Signal "waiting to merge" (finalize)
-Right after the PR is open, run the finalize step so the issue visibly enters
-the **built, PR open, awaiting human merge** state (idempotency-guarded, key
-`merge-signal:TEAM-NNN`):
-```bash
-$PY scripts/merge_signal.py plan TEAM-NNN --url "<pr_url>" \
-  --labels '<current issue labels JSON>' --description-file <issue_body_file>
-```
-- **Exit 0** → apply the emitted action payload with the Linear connector:
-  swap the state label (**remove `approved`, add `waiting-to-merge`** — only one
-  state label at a time; leave `Feature`/`Improvement`/`Bug` untouched), and set
-  the issue description to `new_description` (inserts a `**✅ Solution Ready For
-  Merge**` callout linking the PR, directly under `## Problem`).
-- **Exit 3** → already signalled for this issue; do nothing (idempotent).
-
-Release the lease
+`comment:TEAM-NNN:pr-url:<sha>`). Then **finalize as one atomic action** — do
+NOT hand-set the labels and hand-edit the description separately. Run
+`$PY scripts/merge_signal.py plan TEAM-NNN --url <pr_url> --labels '<current
+labels JSON>' --description-file <issue-desc>` and apply the **whole** payload it
+returns: the `labels_remove`/`labels_add` (strips `approved` + `build-in-progress`,
+adds `build-complete` + `waiting-to-merge`) AND the `new_description` (which
+injects the `**✅ Solution Ready For Merge**` callout with the PR link below
+`## Problem`). Applying only the label half silently drops the callout — this bit
+the dogfood run (session 1efa6b): labels were swapped but the description was
+never updated. **Before releasing the lease, re-fetch the issue and verify the
+callout string is present** in the description; if it isn't, the finalize was
+partial — re-apply. The `plan` step is idempotency-keyed (`merge-signal:TEAM-NNN`)
+so a retry won't duplicate the callout or stack labels. Move the issue to the
+review state if one exists. **Never merge, never enable auto-merge.** Release the
+lease
 (`$PY scripts/lease.py release TEAM-NNN --owner "$JLOOP_WORKER_ID"`) and end.
 
-## 9. Close-out (post-merge — AGENT MUST DO THIS, do not wait for the human)
-When the PR is merged (`gh pr view <n> --json state` = `MERGED`), the issue is
-NOT automatically updated. **You must run the merge-detection step and apply it:**
-```bash
-# emits an idempotent payload (drops waiting-to-merge, adds done)
-$PY scripts/merge_detect.py plan TEAM-NNN --url "<pr_url>" \
-  --labels '<current issue labels JSON>' --description-file <issue_body_file>
-```
-- **Exit 0** → apply the emitted payload via the Linear connector: remove
-  `waiting-to-merge`, add `done`, set the description to `new_description`
-  (callout becomes `**✅ Merged / Complete**`). Also add the `merged` signal
-  label (separate from `done` — it records the PR actually merged). Keep
-  `build-complete` as the implementation-done record and any type label
-  (`Feature`/`Improvement`/`Bug`).
-- **Exit 3** → already detected; skip (idempotent).
-Final labels: `done` + `merged` (+ `build-complete` + type label). Verify with
-`get_issue` — a PR on `origin/main` does NOT mean the issue is done.
-
-When the issue reaches the done state (`Done`) — **strip the stale pipeline
-labels** `spec-waiting-approval`, `approved`, `waiting-to-merge`, and
-`agent-ready`; the remaining state label `build-complete` is kept as a record of
-the shipped implementation. The full six-label vocabulary:
-`spec-waiting-approval → approved → build-in-progress → build-complete → waiting-to-merge → done`.
-The first three are pipeline signals that mean nothing once the work is done;
-leaving `waiting-to-merge` on a merged issue is the #1 recurring bug — always
-clear it. A finished issue carries `done` + `merged` (+ `build-complete` + type)
-and optional `loop-*` GitHub labels as merge evidence.
+## 9. Close-out (when the work is finished)
+When the issue reaches the completed state (`Done`) — whether a human marks it
+after merging your PR, or you do — **strip the pipeline labels**
+`spec-waiting-approval`, `approved`, `agent-ready`, `build-in-progress`,
+`build-complete`, and `waiting-to-merge`. They are pipeline signals (spec drafted /
+human approved to build / build started / build finished / PR open) that mean
+nothing once the work is done; leaving them on makes a completed issue look like
+it is still in flight. A finished issue should carry no gate label — only its
+state. `blocked` is moot once done; the `loop-*` labels may stay as merge
+evidence.
 
 Archiving (to drop a finished issue from the Active/All view) is NOT a
 `save_issue` state — Linear archives via the GraphQL `issueArchive` mutation:
 `mutation { issueArchive(id: "TEAM-NNN", trash: false) { success } }` against
 `https://api.linear.app/graphql` with `LINEAR_API_KEY`. `gh` cannot do it (that
-is GitHub). Agents should not archive by default; leave it to a human.
+is GitHub). **Linear API-key gotcha:** pass the key as `Authorization:
+$LINEAR_API_KEY` with **NO `Bearer ` prefix** — `Authorization: Bearer $LINEAR_API_KEY`
+returns an auth error (session 9f4ab0). Agents should not archive by default; leave it to a human.
 
 ## 8. Blocked
 Comment ONE specific answerable question (state the exact decision, the options,

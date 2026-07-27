@@ -1,8 +1,9 @@
 ---
 name: jloop-spec
 description: Interview the user about a raw idea, then file a build-ready Linear issue AND a machine-readable scope contract. Use to run jloop's spec interview or plan a queued feature. Interactive — requires the user present; never run unattended.
-version: 1.0.0
+version: 1.3.0
 license: MIT
+changelog: "1.3.0 — terminal label renamed `completed` → `done` (a separate `merged` signal label is added when the PR actually merges). 1.2.0 — state machine opened to include build phases (spec-waiting-approval -> approved -> build-in-progress -> build-complete + waiting-to-merge -> done); jloop-build drives the build-phase labels. Ban on *new classification* labels stands."
 ---
 
 # jloop spec interview
@@ -106,17 +107,21 @@ reviewable alongside the code later.
 
 ## Hard rules
 - **The workflow-state label vocabulary is the closed state machine:**
-  NOT invent extra category/type labels (e.g. `upstream-drift`, `chore`) to
-  classify an issue — the title and body already say what it is, and a second
-  state label only muddies the machine. jloop-spec sets only
-  `spec-waiting-approval`; the build sets `waiting-to-merge` when it opens the
-  PR; `approved` and `completed` are human-only gates. (Pre-existing team labels
-  like `Feature`/`Improvement`/`Bug` are fine to keep; the ban is on minting
-  *new* state/classification labels.)
-- Apply `spec-waiting-approval`, but **never** apply the `approved` label. The
-  human adds `approved` in Linear after a final read — that label is the
-  approval gate between "idea" and "an agent builds it". The two-label handshake
-  is deliberate: `spec-waiting-approval` (agent says "ready for your review") →
-  `approved` (human says "go").
+  `spec-waiting-approval` → `approved` → `build-in-progress` → `build-complete`
+  (+ `waiting-to-merge`) → `done`. Do NOT invent extra *classification*
+  labels (e.g. `upstream-drift`, `bug`, `chore`) to categorize an issue — the
+  title and body already say what it is; a second classification label only
+  muddies the state machine. `Feature`/`Improvement`/`Bug` and similar
+  pre-existing team labels are fine to keep; the ban is on minting *new*
+  classification labels. The build-phase labels (`build-in-progress`,
+  `build-complete`, `waiting-to-merge`) are set by jloop-build, never by the
+  spec phase or the human.
+- Agents in the spec phase set only `spec-waiting-approval`; `approved`,
+  `build-in-progress`, `build-complete`, and `done` are never set by an
+  agent here. The human adds `approved` in Linear after a final read — that
+  label is the gate between "idea" and "an agent builds it":
+  `spec-waiting-approval` (agent says "ready for your review") → `approved`
+  (human says "go"); jloop-build then drives the build phases through to
+  `waiting-to-merge`.
 - The contract `version` must equal the Linear issue's current spec version. If
   the user edits the spec later, bump both.
