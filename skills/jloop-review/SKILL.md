@@ -58,6 +58,12 @@ JLOOP_CBM=~/.local/bin/codebase-memory-mcp JLOOP_CBM_PROJECT="<project>" \
   path/module (incl. transitive blast radius via `detect_changes`). Record each
   as a `[SCOPE]` must-fix and paste the JSON report into the verdict. This
   replaces trusting the builder's prose scope ledger with a checked fact.
+- **`GRAPH-CHECK-FAILED` in the report's `violations`** → the CBM was
+  configured but the graph check erred (e.g. malformed/missing binary), so
+  transitive scope could NOT be verified. Treat as a `[SCOPE]` must-fix and
+  paste the JSON report — do NOT approve scope on a failed check. (verify_scope
+  fails CLOSED here: a configured-but-broken graph check is never reported as
+  in-scope.)
 - **Exit 4** (no contract) → `[AC]` must-fix: PR has no enforceable contract.
 
 ## 4. Check merge evidence
@@ -116,7 +122,7 @@ jloop reviews that unchanged commit again.
 
 ## 6. Hard limits (forced merge discipline)
 - The Linear-side state machine is a closed six-label vocabulary:
-  `spec-waiting-approval → approved → build-in-progress → build-complete → waiting-to-merge → completed`. The build
+  `spec-waiting-approval → approved → build-in-progress → build-complete → waiting-to-merge → done`. The build
   sets `build-complete` + `waiting-to-merge` when it opens the PR; review does not change Linear
   state labels — it only sets the GitHub `loop-*` evidence labels below. A PR
   whose issue is `waiting-to-merge` (with `build-complete`) is expected and normal.

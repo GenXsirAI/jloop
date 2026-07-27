@@ -12,7 +12,14 @@ Checks:
 
 Exit 0 = all good; 1 = a check failed (prints the reasons).
 """
-import re, subprocess, sys, tempfile, os, json, time
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,12 +32,14 @@ def check_frontmatter():
         text = skill.read_text()
         m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
         if not m:
-            FAIL.append(f"{skill}: missing YAML frontmatter"); continue
+            FAIL.append(f"{skill}: missing YAML frontmatter")
+            continue
         fm = m.group(1)
         name = re.search(r"^name:\s*(.+)$", fm, re.MULTILINE)
         desc = re.search(r"^description:\s*(.+)$", fm, re.MULTILINE)
         if not name:
-            FAIL.append(f"{skill}: no name in frontmatter"); continue
+            FAIL.append(f"{skill}: no name in frontmatter")
+            continue
         if not desc:
             FAIL.append(f"{skill}: no description in frontmatter")
         nm = name.group(1).strip()
@@ -44,47 +53,58 @@ def check_frontmatter():
 
 
 def check_scripts_exist():
-    for s in ("lease.py", "idempotency.py", "verify_scope.py", "merge_signal.py"):
+    for s in (
+        "lease.py",
+        "idempotency.py",
+        "verify_scope.py",
+        "merge_signal.py",
+    ):
         if not (ROOT / "scripts" / s).exists():
             FAIL.append(f"missing script: scripts/{s}")
 
 
 def _run(args, cwd):
-    return subprocess.run([sys.executable, *args], cwd=cwd,
-                          capture_output=True, text=True)
+    return subprocess.run([sys.executable, *args], cwd=cwd, capture_output=True, text=True)
 
 
 def check_lease_and_idem():
     with tempfile.TemporaryDirectory() as td:
-        env = dict(os.environ,
-                   JLOOP_LEASE_DIR=str(Path(td) / "leases"),
-                   JLOOP_ACTION_DIR=str(Path(td) / "actions"))
+        env = dict(
+            os.environ,
+            JLOOP_LEASE_DIR=str(Path(td) / "leases"),
+            JLOOP_ACTION_DIR=str(Path(td) / "actions"),
+        )
         lease = str(ROOT / "scripts" / "lease.py")
         idem = str(ROOT / "scripts" / "idempotency.py")
 
         def run(args):
-            return subprocess.run([sys.executable, *args], env=env,
-                                  capture_output=True, text=True)
+            return subprocess.run([sys.executable, *args], env=env, capture_output=True, text=True)
 
         # Contention check uses a long TTL so it cannot expire mid-test
         # (a short TTL here races on slow/fast CI runners — fixed after a
         # flaky CI failure during the GOL-7 shakedown).
         r = run([lease, "acquire", "T-1", "--owner", "a", "--ttl", "3600"])
-        if r.returncode != 0: FAIL.append("lease: first acquire should succeed")
+        if r.returncode != 0:
+            FAIL.append("lease: first acquire should succeed")
         r = run([lease, "acquire", "T-1", "--owner", "b", "--ttl", "3600"])
-        if r.returncode != 3: FAIL.append("lease: contended acquire should exit 3")
+        if r.returncode != 3:
+            FAIL.append("lease: contended acquire should exit 3")
         run([lease, "release", "T-1", "--owner", "a"])
         # Expiry check uses its own short-TTL lease on a separate key
         r = run([lease, "acquire", "T-2", "--owner", "a", "--ttl", "1"])
-        if r.returncode != 0: FAIL.append("lease: short-ttl acquire should succeed")
+        if r.returncode != 0:
+            FAIL.append("lease: short-ttl acquire should succeed")
         time.sleep(1.3)
         r = run([lease, "acquire", "T-2", "--owner", "b", "--ttl", "1"])
-        if r.returncode != 0: FAIL.append("lease: expired lease should be reclaimable")
+        if r.returncode != 0:
+            FAIL.append("lease: expired lease should be reclaimable")
 
         r = run([idem, "claim", "k"])
-        if r.returncode != 0: FAIL.append("idem: first claim should succeed")
+        if r.returncode != 0:
+            FAIL.append("idem: first claim should succeed")
         r = run([idem, "claim", "k"])
-        if r.returncode != 3: FAIL.append("idem: duplicate claim should exit 3")
+        if r.returncode != 3:
+            FAIL.append("idem: duplicate claim should exit 3")
 
 
 def check_contracts():
@@ -96,7 +116,8 @@ def check_contracts():
         try:
             data = yaml.safe_load(c.read_text())
         except Exception as e:  # noqa: BLE001
-            FAIL.append(f"{c}: invalid YAML ({e})"); continue
+            FAIL.append(f"{c}: invalid YAML ({e})")
+            continue
         for key in ("issue", "version", "acceptance_criteria"):
             if key not in (data or {}):
                 FAIL.append(f"{c}: missing key '{key}'")
@@ -107,7 +128,8 @@ def check_verify_scope():
     violation, and graceful clean-JSON error on a bad base ref."""
     vs = ROOT / "scripts" / "verify_scope.py"
     if not vs.exists():
-        FAIL.append("missing script: scripts/verify_scope.py"); return
+        FAIL.append("missing script: scripts/verify_scope.py")
+        return
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
         for d in ("src/board", "src/auth", ".factory/contracts"):
@@ -117,18 +139,32 @@ def check_verify_scope():
             "acceptance_criteria: [{id: AC-1, text: board}]\n"
             "non_goals: [{id: NG-1, text: no auth}]\n"
             'relevant_files: ["src/board/**"]\n'
-            'protected: ["src/auth/**"]\nrisk: low\n')
-        g = lambda *a: subprocess.run(["git", *a], cwd=td, capture_output=True, text=True)
-        g("init", "-qb", "main"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
-        (td / "src/board/board.ts").write_text("base\n"); g("add", "-A"); g("commit", "-qm", "base")
+            'protected: ["src/auth/**"]\nrisk: low\n'
+        )
+
+        def g(*a):
+            return subprocess.run(["git", *a], cwd=td, capture_output=True, text=True)
+
+        g("init", "-qb", "main")
+        g("config", "user.email", "t@t")
+        g("config", "user.name", "t")
+        (td / "src/board/board.ts").write_text("base\n")
+        g("add", "-A")
+        g("commit", "-qm", "base")
         g("switch", "-qc", "ENG-9-board")
 
         def run():
-            return subprocess.run([sys.executable, str(vs), "ENG-9", "--base", "main"],
-                                  cwd=td, capture_output=True, text=True)
+            return subprocess.run(
+                [sys.executable, str(vs), "ENG-9", "--base", "main"],
+                cwd=td,
+                capture_output=True,
+                text=True,
+            )
 
         # 1. in-scope -> exit 0, valid JSON, ok:true
-        (td / "src/board/board.ts").write_text("base\nmore\n"); g("add", "-A"); g("commit", "-qm", "in")
+        (td / "src/board/board.ts").write_text("base\nmore\n")
+        g("add", "-A")
+        g("commit", "-qm", "in")
         r = run()
         try:
             if r.returncode != 0 or not json.loads(r.stdout)["ok"]:
@@ -136,7 +172,9 @@ def check_verify_scope():
         except (json.JSONDecodeError, KeyError):
             FAIL.append(f"verify_scope: in-scope produced non-JSON: {r.stdout[:80]!r}")
         # 2. out-of-scope (protected path) -> exit 2, violations present
-        (td / "src/auth/login.ts").write_text("sneaky\n"); g("add", "-A"); g("commit", "-qm", "creep")
+        (td / "src/auth/login.ts").write_text("sneaky\n")
+        g("add", "-A")
+        g("commit", "-qm", "creep")
         r = run()
         try:
             if r.returncode != 2 or json.loads(r.stdout)["ok"]:
@@ -144,8 +182,12 @@ def check_verify_scope():
         except (json.JSONDecodeError, KeyError):
             FAIL.append(f"verify_scope: violation produced non-JSON: {r.stdout[:80]!r}")
         # 3. bad base ref -> exit 4, clean JSON, no crash/stderr
-        r = subprocess.run([sys.executable, str(vs), "ENG-9", "--base", "no-such-ref"],
-                           cwd=td, capture_output=True, text=True)
+        r = subprocess.run(
+            [sys.executable, str(vs), "ENG-9", "--base", "no-such-ref"],
+            cwd=td,
+            capture_output=True,
+            text=True,
+        )
         try:
             if r.returncode != 4 or json.loads(r.stdout).get("reason") != "diff-error":
                 FAIL.append("verify_scope: bad ref should exit 4 with diff-error JSON")
@@ -157,9 +199,13 @@ def check_verify_scope():
 
 def main():
     import argparse
+
     ap = argparse.ArgumentParser(description="jloop self-validation")
-    ap.add_argument("--json", action="store_true",
-                    help="emit a single JSON object {ok, failures} instead of text")
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        help="emit a single JSON object {ok, failures} instead of text",
+    )
     args = ap.parse_args()
 
     check_frontmatter()

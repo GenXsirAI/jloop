@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jloop"
+version = "0.1.0"
+description = "Linear/PR automation toolkit (jloop) — skill-driven build/review/watch loop."
+requires-python = ">=3.11"
+dependencies = ["PyYAML"]
+
+[project.optional-dependencies]
+dev = ["ruff", "basedpyright", "pytest", "pytest-cov", "bandit", "radon", "vulture", "pip-audit"]
+
+# ---------------------------------------------------------------------------
+# Ruff: lint + format in one tool. Replaces flake8/isort/black.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["scripts", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (undefined names, unused)
+    "W",    # pycodestyle warnings
+    "I",    # isort (imports)
+    "B",    # bugbear (likely bugs)
+    "C4",   # comprehensions
+    "SIM",   # simplify
+    "UP",    # pyupgrade (modern syntax)
+    "S",     # bandit (security) — keeps the watch.py broad-except findings visible
+    "BLE",   # blind-except
+]
+ignore = [
+    "S101",  # asserts allowed in tests
+    "BLE001", # broad-except is used intentionally in a few resilience paths
+    "S110",  # try/except/pass: intentional "best-effort parse, ignore" in a few spots
+    # The jloop scripts are a git/idempotency WRAPPER by design -- they shell
+    # out to `git`, `lease.py`, `idempotency.py` with argv lists (never
+    # string-built shell). S603/S607 are therefore expected, not findings.
+    "S603",  # subprocess call -- intentional (wraps git + jloop scripts)
+    "S607",  # partial executable path -- intentional (sys.executable / bare "git")
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "BLE"]
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+# Cyclomatic complexity gate. Keep functions readable.
+# ---------------------------------------------------------------------------
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+# ---------------------------------------------------------------------------
+# Coverage config lives in .coveragerc (single source of truth) so the
+# pytest-cov CLI flags and the gate agree. It scopes coverage to the
+# editable + already-tested scripts; see .coveragerc for rationale.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Bandit security scan.
+# ---------------------------------------------------------------------------
+[tool.bandit]
+exclude_dirs = [".git", ".factory", "tests"]
+# Deliberate, by-design findings for this git/idempotency wrapper:
+#   B404  import subprocess      -> the whole tool wraps git + jloop scripts
+#   B603  subprocess w/o shell  -> argv-list calls, never string-built shell
+#   B607  partial exec path     -> sys.executable / bare "git"
+#   B101  assert_used          -> merge_* use assert isinstance() as cheap
+#                               input validation inside try/except resilience blocks
+#   B110  try/except/pass    -> intentional best-effort parse-and-ignore
+skips = ["B101", "B110", "B404", "B603", "B607"]

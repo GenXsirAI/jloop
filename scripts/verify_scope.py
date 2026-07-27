@@ -23,7 +23,12 @@ Env:
                     skipped with a warning if unset/not found)
   JLOOP_CBM_PROJECT project name as returned by `cbm cli list_projects`
 """
-import argparse, fnmatch, json, os, subprocess, sys
+import argparse
+import fnmatch
+import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 try:
@@ -85,10 +90,18 @@ def _matches_any(path, patterns):
 
 
 def _graph_impact(changed):
+    """Return (symbols, note, attempted).
+
+    `attempted` is True only when CBM was configured (env set + binary present
+    + project set) and we actually tried to run it. A configured-but-failed
+    check is a verification failure that must NOT be treated as 'in scope'.
+    """
     cbm = os.environ.get("JLOOP_CBM")
     project = os.environ.get("JLOOP_CBM_PROJECT")
     if not cbm or not Path(os.path.expanduser(cbm)).exists() or not project:
-        return None, "graph check skipped (JLOOP_CBM / JLOOP_CBM_PROJECT not set)"
+        # Not configured: the graph check is an optional enhancement, so a
+        # missing binary/env is a legitimate skip (fail-open is correct here).
+        return None, "graph check skipped (JLOOP_CBM / JLOOP_CBM_PROJECT not set)", False
     try:
         r = subprocess.run([os.path.expanduser(cbm), "cli", "detect_changes",
                             "--project", project],
@@ -96,9 +109,11 @@ def _graph_impact(changed):
         data = json.loads(r.stdout or "{}")
         symbols = [s.get("qualified_name") or s.get("name")
                    for s in data.get("impacted_symbols", [])]
-        return symbols, None
+        return symbols, None, True
     except Exception as e:  # noqa: BLE001
-        return None, f"graph check error: {e}"
+        # CBM was configured but the check blew up -> we could not verify
+        # scope. Signal this so the caller can fail closed.
+        return None, f"graph check error: {e}", True
 
 
 def main():
@@ -138,7 +153,7 @@ def main():
     out_of_scope = [f for f in changed if allowed and not _matches_any(f, allowed)]
     protected_hits = [f for f in changed if _matches_any(f, protected)]
 
-    impacted, graph_note = _graph_impact(changed)
+    impacted, graph_note, graph_attempted = _graph_impact(changed)
     protected_symbol_hits = []
     if impacted:
         for sym in impacted:
@@ -155,6 +170,14 @@ def main():
     if protected_symbol_hits:
         violations.append({"type": "NG-VIOLATION-TRANSITIVE", "symbols": protected_symbol_hits,
                            "detail": "blast radius reaches a protected module"})
+    if graph_attempted and impacted is None:
+        # CBM was configured but the graph check failed: scope could not be
+        # verified. Fail closed -> surface as a must-fix instead of silently
+        # approving the PR's scope (jloop-review step 3, exit-2 path).
+        violations.append({
+            "type": "GRAPH-CHECK-FAILED",
+            "detail": graph_note or "graph scope check produced no result",
+        })
 
     report = {
         "ok": not violations, "issue": a.issue, "base": base,

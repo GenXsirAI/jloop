@@ -17,7 +17,7 @@ Two side effects, both idempotency-guarded (AC-4, keyed `merge-signal:<issue>`):
 
 State machine (six labels, closed vocabulary — AC-1):
     spec-waiting-approval -> approved -> build-in-progress ->
-    build-complete -> waiting-to-merge -> completed
+    build-complete -> waiting-to-merge -> done
 
 Design (matches watch.py): this script does NOT call the Linear API directly
 (NG-4: no new connector/tooling). It computes the exact desired mutation and
@@ -34,6 +34,7 @@ Usage:
 
 Reuses scripts/idempotency.py (PROTECTED — call, never modify: NG-2).
 """
+
 import argparse
 import json
 import os
@@ -51,15 +52,21 @@ ACTION_DIR = Path(os.environ.get("JLOOP_ACTION_DIR", str(REPO_ROOT / ".factory" 
 
 # Closed state-label vocabulary (AC-1). Order == workflow progression.
 # The build-aware machine: spec -> approved -> build-in-progress -> build-complete
-# -> waiting-to-merge -> completed. `build-in-progress` is transient (dropped when
+# -> waiting-to-merge -> done. `build-in-progress` is transient (dropped when
 # the build finalizes into build-complete); `build-complete` persists through the
 # waiting-to-merge phase as a record that the PR's implementation is done.
-STATE_LABELS = ["spec-waiting-approval", "approved", "build-in-progress",
-                "build-complete", "waiting-to-merge", "completed"]
-FROM_LABEL = "approved"          # removed at finalize (human approved to build)
-TO_LABEL = "waiting-to-merge"    # added at finalize (PR open, awaiting merge)
-TRANSIENT_LABEL = "build-in-progress"   # dropped at finalize (build now complete)
-PRESERVE_LABEL = "build-complete"       # retained through waiting-to-merge
+STATE_LABELS = [
+    "spec-waiting-approval",
+    "approved",
+    "build-in-progress",
+    "build-complete",
+    "waiting-to-merge",
+    "done",
+]
+FROM_LABEL = "approved"  # removed at finalize (human approved to build)
+TO_LABEL = "waiting-to-merge"  # added at finalize (PR open, awaiting merge)
+TRANSIENT_LABEL = "build-in-progress"  # dropped at finalize (build now complete)
+PRESERVE_LABEL = "build-complete"  # retained through waiting-to-merge
 
 CALLOUT_HEAD = "**✅ Solution Ready For Merge**"
 # Matches a previously-inserted callout block (head + its link line), so a
@@ -94,9 +101,9 @@ def swap_labels(labels):
                 if lbl != PRESERVE_LABEL:
                     removed.append(lbl)  # approved + build-in-progress are dropped
                 if lbl == PRESERVE_LABEL:
-                    out.append(lbl)      # build-complete is kept
+                    out.append(lbl)  # build-complete is kept
                 continue
-            # any other state label (spec-waiting-approval, completed) -> drop
+            # any other state label (spec-waiting-approval, done) -> drop
             removed.append(lbl)
             continue
         out.append(lbl)  # non-state label preserved
@@ -129,10 +136,7 @@ def insert_callout(description, url):
         return callout_block(url) + "\n" + desc.lstrip("\n")
     start = m.end()
     nxt = re.search(r"\n##\s+", desc[start:])
-    if nxt:
-        insert_at = start + nxt.start()
-    else:
-        insert_at = len(desc.rstrip("\n"))
+    insert_at = start + nxt.start() if nxt else len(desc.rstrip("\n"))
     before = desc[:insert_at].rstrip("\n")
     after = desc[insert_at:]
     return before + "\n" + block + ("\n" + after.lstrip("\n") if after.strip() else "\n")
@@ -142,8 +146,7 @@ def insert_callout(description, url):
 # plan (idempotency-guarded action payload for the agent)                      #
 # --------------------------------------------------------------------------- #
 def _idem(args):
-    return subprocess.run([sys.executable, str(IDEMPOTENCY), *args],
-                          capture_output=True, text=True)
+    return subprocess.run([sys.executable, str(IDEMPOTENCY), *args], capture_output=True, text=True)
 
 
 def cmd_plan(issue, url, labels, description):
@@ -152,8 +155,7 @@ def cmd_plan(issue, url, labels, description):
     if IDEMPOTENCY.exists():
         r = _idem(["claim", key, "--meta", json.dumps({"pr": url})])
         if r.returncode == 3:
-            print(json.dumps({"ok": False, "reason": "already-signalled",
-                              "issue": issue, "key": key}))
+            print(json.dumps({"ok": False, "reason": "already-signalled", "issue": issue, "key": key}))
             return 3
 
     new_labels, added, removed = swap_labels(labels)
