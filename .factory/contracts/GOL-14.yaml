@@ -1,0 +1,43 @@
+issue: GOL-14
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: >
+      validate.py gains check_skill_sync() that byte-compares each repo
+      skills/<name>/SKILL.md against <INSTALLED>/<name>/SKILL.md, where
+      <INSTALLED> is $JLOOP_INSTALLED_SKILLS_DIR (default ~/.hermes/skills).
+      Differing or missing installed skills append a FAIL naming the skill and
+      a drift-direction hint, causing exit 1.
+  - id: AC-2
+    text: >
+      When the installed-skills directory does not exist (e.g. CI), the check
+      is silently skipped and the validation result is unaffected.
+  - id: AC-3
+    text: >
+      Tests cover in-sync pass, differing-file fail, missing-installed-skill
+      fail, and absent-dir skip, all via a temp JLOOP_INSTALLED_SKILLS_DIR
+      (never the real ~/.hermes).
+  - id: AC-4
+    text: >
+      Existing validate.py checks and exit-code semantics (0 ok / 1 fail,
+      --json output shape) are unchanged.
+non_goals:
+  - id: NG-1
+    text: No auto-sync/copying of skills; the check reports only.
+  - id: NG-2
+    text: >
+      No changes to watch.py, lease.py, idempotency.py, verify_scope.py
+      (PROTECTED), and no Linear/GitHub API calls.
+  - id: NG-3
+    text: >
+      No new state/classification labels; only SKILL.md files are compared
+      (references/ files deferred).
+relevant_files:
+  - "scripts/validate.py"
+  - "tests/test_validate_skill_sync.py"
+protected:
+  - "scripts/lease.py"
+  - "scripts/idempotency.py"
+  - "scripts/verify_scope.py"
+  - "scripts/watch.py"
+risk: low
