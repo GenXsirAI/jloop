@@ -27,8 +27,13 @@ FAIL = []
 
 
 def check_frontmatter():
+    skills_dir = ROOT / "skills"
+    if not skills_dir.is_dir():
+        # Deployment repo (scripts + .factory only; skills live in the agent's
+        # skills dir). Nothing to check here.
+        return
     names = {}
-    for skill in sorted((ROOT / "skills").glob("*/SKILL.md")):
+    for skill in sorted(skills_dir.glob("*/SKILL.md")):
         text = skill.read_text()
         m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
         if not m:
