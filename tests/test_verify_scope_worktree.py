@@ -18,6 +18,8 @@ Run:  python3 tests/test_verify_scope_worktree.py
    or: python3 -m pytest tests/test_verify_scope_worktree.py -q
 
 Self-contained: creates temp git repos, never touches the real .factory tree.
+Compatible with both the hand-rolled harness (python3 <file>) and pytest
+(each test loads the module itself; no pytest-fixture parameters).
 """
 import importlib.util
 import os
@@ -71,12 +73,13 @@ def _make_repo_with_ignored_factory(root):
     _git(root, "commit", "-qm", "init")
 
 
-def test_loads_from_main_repo(m):
+def test_loads_from_main_repo():
     """Baseline: contract loads when cwd IS the main repo.
 
     _repo_root() resolves via git (cwd-relative), so the test must chdir into
     the repo under test rather than relying on the test runner's cwd.
     """
+    m = _load()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "mainrepo"
         _make_repo_with_ignored_factory(root)
@@ -92,13 +95,14 @@ def test_loads_from_main_repo(m):
            and data.get("protected") == ["core/secrets.py"])
 
 
-def test_loads_from_linked_worktree(m):
+def test_loads_from_linked_worktree():
     """Regression: contract must load when cwd is a LINKED worktree.
 
     Before the fix this FAILS with 'contract not found' because the worktree
     does not contain the git-ignored .factory tree, and a cwd-relative path
     misses it.
     """
+    m = _load()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "mainrepo"
         _make_repo_with_ignored_factory(root)
@@ -122,9 +126,11 @@ def test_loads_from_linked_worktree(m):
            and data.get("protected") == ["core/secrets.py"])
 
 
-def test_missing_contract_still_reports_error(m):
+def test_missing_contract_still_reports_error():
     """Negative control: a genuinely absent contract still reports not-found
-    (the fix must not mask real 'no contract' conditions)."""
+    (the fix must not mask real 'no contract' conditions).
+    """
+    m = _load()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "mainrepo"
         root.mkdir(parents=True)
@@ -137,9 +143,8 @@ def test_missing_contract_still_reports_error(m):
 
 
 if __name__ == "__main__":
-    m = _load()
-    test_loads_from_main_repo(m)
-    test_loads_from_linked_worktree(m)
-    test_missing_contract_still_reports_error(m)
+    test_loads_from_main_repo()
+    test_loads_from_linked_worktree()
+    test_missing_contract_still_reports_error()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed")
     sys.exit(1 if FAIL else 0)
