@@ -26,8 +26,17 @@ gh pr list --state open \
 Skip drafts. For each PR find the latest comment whose first line is
 `jloop review of COMMIT_SHA`. Skip a PR when that recorded SHA equals its current
 `headRefOid` and it already has `loop-approved`, `loop-changes-requested`, or
-`needs-human-review`. Review again when new commits landed. Nothing to do → say
-so and end.
+`needs-human-review`. Review again when new commits landed. **Do NOT skip PRs
+labeled `loop-follow-up`** — these had follow-up commits pushed by the builder
+(e.g. a retry that found an existing PR) and need a fresh verdict. Nothing to
+do → say so and end.
+
+### Follow-up PRs
+A `loop-follow-up` PR may reference more than one issue. Parse ALL
+`Closes TEAM-NNN` occurrences in the PR body, fetch every linked issue and
+contract, and review the combined diff against ALL their ACs and NGs. After
+posting the verdict, remove `loop-follow-up` (it is a review-request signal,
+consumed by the review).
 
 ## 2. Read the contract and code
 - Parse `Closes TEAM-NNN` from the PR body; fetch the full Linear issue
