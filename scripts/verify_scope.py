@@ -37,20 +37,59 @@ except ImportError:
     yaml = None
 
 
+def _repo_root():
+    """Resolve the MAIN worktree root so .factory lives at the repo root, not
+    the current dir.
+
+    The build loop may run INSIDE a linked worktree whose own toplevel is a
+    /tmp path (e.g. GiLoop builds in ``/tmp/<issue>``). A naive
+    ``Path(".factory/contracts")`` then resolves under the worktree and misses
+    the durable contract state (which lives only in the main repo and is
+    typically git-ignored, so it is never checked out into worktrees).
+
+    ``git rev-parse --git-common-dir`` points at the shared ``<repo>/.git``
+    from ANY worktree; its parent is the main repo root where .factory lives.
+    Falls back to cwd when not inside a git repo.
+    """
+    r = subprocess.run(["git", "rev-parse", "--git-common-dir"],
+                       capture_output=True, text=True)
+    common = r.stdout.strip()
+    if not common:
+        return "."
+    p = Path(common)
+    root = p.parent if p.name == ".git" else p
+    return str(root.resolve())
+
+
 def _load_contract(issue):
-    p = Path(".factory/contracts") / f"{issue}.yaml"
+    p = Path(_repo_root()) / ".factory" / "contracts" / f"{issue}.yaml"
     if not p.exists():
         return None, f"contract not found: {p}"
     text = p.read_text()
     if yaml:
         return yaml.safe_load(text), None
-    # minimal fallback parser: top-level list keys we care about
+    # minimal fallback parser: top-level list keys we care about.
+    # Handles both block lists (- item) and inline lists (key: ["a", "b"]).
     data, cur = {}, None
     for line in text.splitlines():
         if not line.strip() or line.strip().startswith("#"):
             continue
-        if not line.startswith(("-", " ")) and line.rstrip().endswith(":"):
-            cur = line.strip()[:-1]; data[cur] = []
+        if not line.startswith(("-", " ")) and ":" in line:
+            key, _, rest = line.partition(":")
+            key, rest = key.strip(), rest.strip()
+            if rest.startswith("[") and rest.endswith("]"):
+                try:
+                    data[key] = json.loads(rest.replace("'", '"'))
+                except json.JSONDecodeError:
+                    data[key] = [x.strip().strip('"\'')
+                                 for x in rest[1:-1].split(",") if x.strip()]
+                cur = None
+            elif not rest:
+                cur = key
+                data[cur] = []
+            else:
+                data[key] = rest.strip('"\'')
+                cur = None
         elif line.strip().startswith("-") and cur:
             data[cur].append(line.strip()[1:].strip().strip('"\''))
     return data, None
