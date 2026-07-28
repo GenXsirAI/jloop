@@ -45,6 +45,33 @@ those are outside this toolkit.
 If unsure which, ask the user one question — do not guess, because each phase
 has a **closed set of labels it is allowed to touch** (below).
 
+## Deployment config — `.factory/jloop.yaml`
+
+Skills and scripts are deployment-agnostic. Every placeholder resolves from
+**`.factory/jloop.yaml`** in the target repo (template:
+`.factory/jloop.yaml.example`):
+
+| Placeholder in skills | Config key |
+|---|---|
+| `TEAM` / `TEAM-NNN` | `team_key` |
+| target GitHub repo | `github_repo` |
+| local clone / workdir | `workdir` |
+| `$PY` | `python` |
+| `JLOOP_CBM` / `JLOOP_CBM_PROJECT` | `cbm.binary` / `cbm.project` |
+
+At the start of every pass, read this file (plain key parsing is fine — no
+PyYAML dependency) and export the standard env block:
+
+```bash
+JLOOP_REPO=$(config workdir); cd "$JLOOP_REPO"; git fetch origin
+export JLOOP_LEASE_DIR="$JLOOP_REPO/.factory/leases"
+export JLOOP_ACTION_DIR="$JLOOP_REPO/.factory/actions"
+export JLOOP_WORKER_ID="${JLOOP_WORKER_ID:-$(whoami)@$(hostname)-$$}"
+```
+
+If `.factory/jloop.yaml` is missing, stop and tell the user to copy the
+example — never guess a team key or repo.
+
 ## Shared invariants (apply to every sub-skill)
 
 1. **6-label state machine (closed vocabulary).**

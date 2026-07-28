@@ -28,6 +28,21 @@ them. Implement only what the AC/NG contract says. Use a **push-only** GitHub
 token (no merge, no admin, cannot add approval labels). Never print secrets.
 
 ## 0. Preflight
+Resolve deployment config first: read `.factory/jloop.yaml` (team key, repo,
+workdir, python) — `TEAM`, the repo, and `$PY` below all come from it. Missing
+config → stop and report. Then, before mutating ANY Linear state:
+
+1. **GitHub auth**: `gh auth status` must report a valid token. In a
+   cron/headless env with no tty, do NOT run `gh auth login` interactively —
+   see `references/cron-headless-github-auth.md`. If the queue has actionable
+   work but `gh` is broken, end the pass and report the block.
+2. **Linear access**: if `mcp__linear__list_issues` is not wired, fall back to
+   direct GraphQL (`references/linear-direct-graphql.md`); if MCP is reachable
+   but tool calls fail with argument-validation errors, use
+   `references/linear-mcp-jsonrpc-fallback.md`. If neither path works, end the
+   pass — never mutate state you can't read back.
+3. **Repo reachable**: `git ls-remote origin >/dev/null` from the workdir.
+
 - Confirm this is the intended GitHub repo and `origin` is reachable.
 - Detect the default branch — never assume `main`:
   `BASE=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)`.
@@ -110,6 +125,9 @@ JLOOP_CBM=~/.local/bin/codebase-memory-mcp JLOOP_CBM_PROJECT="<project>" \
   path/module (including transitive blast radius). Fix the scope creep or, if the
   work genuinely needs it, go to step 8 — do NOT silently broaden scope.
 - Review `git diff`/`git status`. Stop if the diff has unrelated work or secrets.
+- If the change touches UI/CSS, lint+typecheck green is NOT visual proof — use
+  `references/verify-frontend-changes.md` (computed-style check, fresh dev
+  server, end-to-end 200 for data-driven pages) before claiming a visual AC.
 
 ## 7. Ship exactly one PR (no duplicates)
 Guard PR creation so a retry/rerun never opens a second PR:
@@ -118,7 +136,9 @@ $PY scripts/idempotency.py claim "pr-create:TEAM-NNN"
 ```
 - **Exit 3** → a PR was already created for this issue. Find it
   (`gh pr list --search "TEAM-NNN in:body"`), push follow-up commits to its
-  branch instead of opening another. Do not create a duplicate.
+  branch instead of opening another, and add the `loop-follow-up` label to the
+  PR so the reviewer re-reviews it even though a verdict label already exists.
+  Do not create a duplicate.
 - **Exit 0** → `git push -u origin TEAM-NNN-short-slug` and `gh pr create`
   targeting `$BASE`. Then
   `$PY scripts/idempotency.py commit "pr-create:TEAM-NNN" --meta '{"pr":<num>}'`.

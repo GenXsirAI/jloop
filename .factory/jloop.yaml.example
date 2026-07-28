@@ -1,0 +1,38 @@
+# jloop deployment config — copy to .factory/jloop.yaml in the TARGET repo.
+# This is the ONE file a deployment edits; skills and scripts stay generic.
+# Every skill resolves its placeholders from here at pass start:
+#   TEAM        -> team_key
+#   the repo    -> github_repo (owner/name) + workdir (local clone)
+#   $PY         -> python
+#
+# Keep it committed: workers and CI must all see the same config.
+
+team_key: ENG                    # Linear team key; issue IDs look like ENG-NNN
+github_repo: your-org/your-repo  # where PRs are opened
+workdir: ~/your-repo             # local clone the loop operates on
+python: python3                  # interpreter used for scripts/*.py
+
+# Linear access strategy, in order of preference. The loop degrades
+# gracefully: mcp -> direct GraphQL (LINEAR_API_KEY, NO "Bearer" prefix)
+# -> stop and report. See skills/jloop/references/.
+linear:
+  mcp: true                      # use mcp__linear__* tools when wired
+  graphql_fallback: true         # fall back to api.linear.app/graphql
+
+# Optional graph scope check (codebase-memory-mcp). When configured but
+# broken, verify_scope fails CLOSED (GRAPH-CHECK-FAILED).
+cbm:
+  binary: ""                     # e.g. ~/.local/bin/codebase-memory-mcp
+  project: ""                    # from `cbm cli list_projects`
+
+# Label vocabulary (defaults shown; rename only if your workspace differs).
+labels:
+  spec_waiting: spec-waiting-approval
+  approved: approved
+  build_in_progress: build-in-progress
+  build_complete: build-complete
+  waiting_to_merge: waiting-to-merge
+  done: done
+  merged: merged
+  blocked: blocked
+  follow_up: loop-follow-up      # PR got follow-up commits; review re-reviews
