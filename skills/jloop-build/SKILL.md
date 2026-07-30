@@ -1,7 +1,7 @@
 ---
 name: jloop-build
 description: Claim the next approved Linear issue with an atomic lease, implement only its contract, and open exactly one PR. Use to run jloop's builder or fix jloop review feedback. Designed for /loop; one pass does one unit of work.
-version: 1.1.0
+version: 1.2.0
 # 1.1.0 — step 7 finalize must run merge_signal.py plan and apply BOTH the label
 #          and new_description payloads atomically (callout was silently dropped
 #          when set manually — session 1efa6b); verify callout present before
@@ -99,6 +99,16 @@ step, confirm the contract file exists:
 If it is absent, **do not proceed** — release the lease, comment `missing
 contract for TEAM-NNN` on the issue, and end the pass. Never guess or synthesize
 a contract.
+**Strict version mode (fail-closed, GOL-20):** by default the build only checks
+that the contract `version` is *compatible* with the issue's `spec_version`.
+When strict mode is enabled — flag `--strict-version` or env
+`JLOOP_STRICT_VERSION=1` — the build MUST fail unless the contract's `version`
+**exactly equals** the issue's `spec_version`. Implement this as a hard gate:
+read the contract's `version` and the issue's `spec_version`; if strict mode is
+on and they differ, `echo "contract version X != spec_version Y for TEAM-NNN";
+exit 1` (release the lease, comment, end) — do NOT silently continue. Default
+(off) keeps the lenient comparison. This guard lives in the contract loader /
+build preamble; it is not a prose suggestion.
 Fetch the full issue (comments + relations) AND load
 `.factory/contracts/TEAM-NNN.yaml`. Confirm the contract `version` matches the
 issue's current spec version; if not, the spec changed under you — release the
