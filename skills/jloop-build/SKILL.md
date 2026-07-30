@@ -93,6 +93,12 @@ $PY scripts/lease.py acquire TEAM-NNN --owner "$JLOOP_WORKER_ID"
   `$PY scripts/lease.py renew TEAM-NNN --owner "$JLOOP_WORKER_ID"`.
 
 ## 4. Read the contract
+**Existence guard (fail-closed, GOL-17):** before doing anything else in this
+step, confirm the contract file exists:
+`test -f .factory/contracts/TEAM-NNN.yaml || { echo "missing contract for TEAM-NNN"; exit 1; }`
+If it is absent, **do not proceed** — release the lease, comment `missing
+contract for TEAM-NNN` on the issue, and end the pass. Never guess or synthesize
+a contract.
 Fetch the full issue (comments + relations) AND load
 `.factory/contracts/TEAM-NNN.yaml`. Confirm the contract `version` matches the
 issue's current spec version; if not, the spec changed under you — release the
