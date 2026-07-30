@@ -32,6 +32,17 @@ def _rec(key: str) -> Path:
     return ACT_DIR / f"{h}.json"
 
 
+def _namespaced_key(key: str, ns: str) -> str:
+    """Scope a key under an optional namespace.
+
+    When ``ns`` is provided the stored key becomes ``<ns>:<key>`` so the same
+    logical action name in different namespaces (e.g. ``pr-create`` vs
+    ``comment`` vs a per-team scope) cannot collide. An empty namespace is the
+    historical default and preserves backward compatibility (the on-disk key is
+    unchanged from prior releases)."""
+    return f"{ns}:{key}" if ns else key
+
+
 def _read(p):
     try:
         return json.loads(p.read_text())
@@ -47,7 +58,8 @@ def _write(p, data):
     os.replace(tmp, p)
 
 
-def claim(key, meta):
+def claim(key, meta, ns=""):
+    key = _namespaced_key(key, ns)
     p = _rec(key); p.parent.mkdir(parents=True, exist_ok=True)
     existing = _read(p)
     if existing is not None:
@@ -64,7 +76,8 @@ def claim(key, meta):
     print(json.dumps({"ok": True, "record": rec})); return 0
 
 
-def commit(key, meta):
+def commit(key, meta, ns=""):
+    key = _namespaced_key(key, ns)
     p = _rec(key); rec = _read(p)
     if rec is None:
         rec = {"key": key}
@@ -75,8 +88,8 @@ def commit(key, meta):
     print(json.dumps({"ok": True, "record": rec})); return 0
 
 
-def status(key):
-    rec = _read(_rec(key))
+def status(key, ns=""):
+    rec = _read(_rec(_namespaced_key(key, ns)))
     print(json.dumps({"exists": rec is not None, "record": rec})); return 0
 
 
@@ -85,15 +98,18 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     for c in ("claim", "commit"):
         s = sub.add_parser(c); s.add_argument("key"); s.add_argument("--meta", default="")
+        s.add_argument("--ns", default="", help="optional namespace to scope the key (backward-compatible)")
     s = sub.add_parser("status"); s.add_argument("key")
+    s.add_argument("--ns", default="", help="optional namespace to scope the key (backward-compatible)")
     a = ap.parse_args()
     meta = {}
     if getattr(a, "meta", ""):
         try: meta = json.loads(a.meta)
         except json.JSONDecodeError: sys.exit("--meta must be JSON")
-    if a.cmd == "claim":  sys.exit(claim(a.key, meta))
-    if a.cmd == "commit": sys.exit(commit(a.key, meta))
-    if a.cmd == "status": sys.exit(status(a.key))
+    ns = getattr(a, "ns", "")
+    if a.cmd == "claim":  sys.exit(claim(a.key, meta, ns))
+    if a.cmd == "commit": sys.exit(commit(a.key, meta, ns))
+    if a.cmd == "status": sys.exit(status(a.key, ns))
 
 
 if __name__ == "__main__":
