@@ -44,7 +44,7 @@ def test_skill_sync():
 
         # Copy the actual validate.py from the repo (resolve repo root from this file)
         repo_scripts = Path(__file__).resolve().parent.parent / "scripts"
-        for script_name in ["validate.py", "lease.py", "idempotency.py", "verify_scope.py", "merge_signal.py"]:
+        for script_name in ["validate.py", "redact.py", "lease.py", "idempotency.py", "verify_scope.py", "merge_signal.py"]:
             src = repo_scripts / script_name
             dst = base / "scripts" / script_name
             # If the file doesn't exist in the repo (should not happen), create a dummy

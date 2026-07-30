@@ -38,6 +38,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # GOL-26: find sibling redact.py
+from redact import redact_secrets  # GOL-26: scrub secrets from surfaced errors
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WATCH_YAML = REPO_ROOT / ".factory" / "watch.yaml"
 ACTION_DIR = REPO_ROOT / ".factory" / "actions"
@@ -340,7 +343,10 @@ def _record_skill(data, name, repo, ref):
         # repo unreachable / not found: do NOT record a dead entry (it would
         # never resolve and would silently report "no drift" forever). Leave
         # it untracked so back-fill re-prompts on the next run.
-        print(f"  SKIP {name}: cannot resolve repo '{repo}' ({err or 'no HEAD'}). Fix the URL and re-run --backfill.")
+        why = redact_secrets(err) or "no HEAD"
+        msg = f"  SKIP {name}: cannot resolve repo '{repo}' ({why}). "
+        msg += "Fix the URL and re-run --backfill."
+        print(msg)
         return False
     last_tag = newest_semver(tags) if tags else ""
     entry = {
@@ -395,7 +401,7 @@ def cmd_run(dry_run=False):
             continue
         default_branch, head_sha, tags, err = ls_remote(repo)
         if err:
-            print(f"watch: {name}: ERROR {err} -- skipping.")
+            print(f"watch: {name}: ERROR {redact_secrets(err)} -- skipping.")
             continue
         old_sha = s.get("last_seen_sha", "")
         old_tag = s.get("last_seen_tag", "") or ""

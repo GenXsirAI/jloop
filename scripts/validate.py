@@ -25,6 +25,9 @@ import tempfile
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # GOL-26: find sibling redact.py
+from redact import redact_secrets  # GOL-26: scrub secrets from surfaced output
+
 ROOT = Path(__file__).resolve().parent.parent
 FAIL = []
 
@@ -259,12 +262,12 @@ def main():
 
     ok = not FAIL
     if args.json:
-        print(json.dumps({"ok": ok, "failures": FAIL}))
+        print(json.dumps({"ok": ok, "failures": [redact_secrets(f) for f in FAIL]}))
         return 0 if ok else 1
     if FAIL:
         print("jloop validation FAILED:")
         for f in FAIL:
-            print(f"  - {f}")
+            print(f"  - {redact_secrets(f)}")
         return 1
     print("jloop validation OK")
     return 0
