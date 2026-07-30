@@ -69,10 +69,13 @@ TRANSIENT_LABEL = "build-in-progress"  # dropped at finalize (build now complete
 PRESERVE_LABEL = "build-complete"  # retained through waiting-to-merge
 
 CALLOUT_HEAD = "**✅ Solution Ready For Merge**"
+MERGED_CALLOUT_HEAD = "**✅ Merged / Complete**"
 # Matches a previously-inserted callout block (head + its link line), so a
-# re-run updates it in place instead of appending a second one (AC-4).
+# re-run updates it in place instead of appending a second one (AC-4). Matches
+# EITHER head (Solution Ready For Merge OR Merged / Complete) so switching
+# between them (finalize -> merge) refreshes the single callout in place.
 _CALLOUT_RE = re.compile(
-    r"\n?" + re.escape(CALLOUT_HEAD) + r"\n\[[^\]]*\]\([^)]*\)\n",
+    r"\n?" + r"\*\*✅ [^*]*\*\*" + r"\n\[[^\]]*\]\([^)]*\)\n?",
     re.MULTILINE,
 )
 
@@ -134,6 +137,34 @@ def insert_callout(description, url):
     if not m:
         # fallback: prepend
         return callout_block(url) + "\n" + desc.lstrip("\n")
+    start = m.end()
+    nxt = re.search(r"\n##\s+", desc[start:])
+    insert_at = start + nxt.start() if nxt else len(desc.rstrip("\n"))
+    before = desc[:insert_at].rstrip("\n")
+    after = desc[insert_at:]
+    return before + "\n" + block + ("\n" + after.lstrip("\n") if after.strip() else "\n")
+
+
+def merged_callout(description, url):
+    """Refresh the callout to the MERGED state (head -> 'Merged / Complete').
+
+    Reuses the same idempotent in-place regex as insert_callout so a callout
+    that currently says 'Solution Ready For Merge' is swapped to 'Merged /
+    Complete' (and the url refreshed) without stacking a second block. This is
+    the description half the merge-label cron must apply when a PR is merged.
+    """
+    desc = description if description is not None else ""
+    desc = _CALLOUT_RE.sub("\n", desc)  # strip any existing callout first
+    return insert_callout_head(desc, MERGED_CALLOUT_HEAD, url)
+
+
+def insert_callout_head(description, head, url):
+    """Insert a callout with an arbitrary head (used by both finalize/merged)."""
+    desc = description if description is not None else ""
+    block = "\n" + f"{head}\n[{url}]({url})\n"
+    m = re.search(r"(^|\n)##\s+Problem\s*\n", desc)
+    if not m:
+        return f"{head}\n[{url}]({url})\n\n" + desc.lstrip("\n")
     start = m.end()
     nxt = re.search(r"\n##\s+", desc[start:])
     insert_at = start + nxt.start() if nxt else len(desc.rstrip("\n"))
@@ -247,6 +278,11 @@ def main():
 
     t = sub.add_parser("transform-description", help="pure: stdin desc -> stdout new desc")
     t.add_argument("--url", required=True)
+    t.add_argument(
+        "--merged",
+        action="store_true",
+        help="emit the 'Merged / Complete' callout instead of 'Solution Ready For Merge'",
+    )
 
     v = sub.add_parser("verify", help="post-finalize guard: callout URL must match --url")
     v.add_argument("issue")
@@ -266,7 +302,9 @@ def main():
             desc = Path(a.description_file).read_text()
         sys.exit(cmd_plan(a.issue, a.url, labels, desc))
     if a.cmd == "transform-description":
-        sys.stdout.write(insert_callout(sys.stdin.read(), a.url))
+        desc = sys.stdin.read()
+        new_desc = merged_callout(desc, a.url) if a.merged else insert_callout(desc, a.url)
+        sys.stdout.write(new_desc)
         sys.exit(0)
     if a.cmd == "verify":
         desc = a.description
