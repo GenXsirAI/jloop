@@ -1,0 +1,17 @@
+issue: GOL-16
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: |
+      The lease script installs a signal handler that gracefully releases the lease on termination.
+  - id: AC-2
+    text: |
+      A `reap --force` subcommand exists and correctly deletes stale lease files older than 2×TTL.
+non_goals:
+  - id: NG-1
+    text: Do not change the core lease algorithm (O_CREAT|O_EXCL).
+relevant_files:
+  - "scripts/lease.py"
+protected:
+  - "scripts/lease.py"
+risk: low
