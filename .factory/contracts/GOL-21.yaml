@@ -1,0 +1,38 @@
+issue: GOL-21
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: |
+      In scripts/merge_signal.py, make cmd_plan a fail-closed gate: before
+      emitting its action payload, assert the computed payload contains all
+      three required keys — labels_add, labels_remove, new_description. If any
+      is missing (e.g. the swap produced no label change and new_description
+      was dropped), print a clear error to stderr and exit non-zero (sys.exit(1))
+      instead of printing the payload.
+  - id: AC-2
+    text: |
+      In cmd_plan, if the idempotency claim itself fails in a way that prevents
+      producing a trustworthy payload (e.g. the idempotency backend is missing
+      when required), exit non-zero rather than silently emitting a partial
+      payload.
+  - id: AC-3
+    text: |
+      Update the jloop-build skill (step 7) to instruct the builder that the
+      merge_signal.py plan call is a hard gate: if it exits non-zero, or its
+      JSON lacks labels_add / labels_remove / new_description, the finalize
+      pass must ABORT (comment the failure on the issue, release the lease, end)
+      instead of silently continuing. Prevents the 1efa6b partial-finalize
+      failure mode.
+non_goals:
+  - id: NG-1
+    text: |
+      Do not change the label vocabulary or the shape of a successful payload.
+      Do not add new side effects (no extra Linear calls, no new files beyond
+      the payload JSON already written).
+relevant_files:
+  - "scripts/merge_signal.py"
+  - "skills/jloop-build"
+  - "tests/test_merge_signal_plan.py"
+protected:
+  - "scripts/lease.py"
+risk: low
