@@ -106,6 +106,13 @@ lease, comment, and end. Implement only `acceptance_criteria`. `non_goals` and
 `protected` are binding. If an AC is ambiguous, conflicts with an NG, or depends
 on an unresolved blocker → go to step 8. Never guess.
 
+**Strict version mode (GOL-20):** an optional stricter check can be enabled with
+the flag `--strict-version` or the env var `JLOOP_STRICT_VERSION=1`. When set,
+the build must fail unless the contract's `version` **exactly equals** the
+issue's `spec_version` (not just "compatible"). If they differ, abort the pass
+(release lease, comment the mismatch, end) before any code is written. The
+default (flag off) preserves the existing lenient comparison.
+
 ## 5. Build — forced correct branching
 - `git fetch origin` then branch from the **fresh** default branch:
   `git switch -c TEAM-NNN-short-slug origin/$BASE` (resume if it already exists).
