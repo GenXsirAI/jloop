@@ -1,0 +1,16 @@
+{
+  "action": "merge_signal",
+  "issue": "GOL-17",
+  "pr_url": "https://github.com/GenXsirAI/jloop/pull/16",
+  "labels_add": [
+    "waiting-to-merge"
+  ],
+  "labels_remove": [
+    "approved"
+  ],
+  "labels_final": [
+    "waiting-to-merge"
+  ],
+  "new_description": "## Problem\n\nContract version check (jloop\u2011build step 4)\n\n* Compares contract.version with the issue\u2019s spec version, but does not verify that the contract file actually exists before trying to load it.\n\n**\u2705 Solution Ready For Merge**\n[https://github.com/GenXsirAI/jloop/pull/16](https://github.com/GenXsirAI/jloop/pull/16)\n\n## Acceptance Criteria\n\n- [ ] AC-1 \u2014 In jloop\u2011build step 4, add a guard: `if not contract_path.is_file():` abort with a clear error message (e.g., \"missing contract for TEAM\u2011NNN\").\n\n## Non-goals\n\n* NG-1 \u2014 Do not change the semantics of the version field beyond adding the existence check.\n\n## Relevant files\n\n* jloop\u2011build (the builder script or the step in the skill where contract version check occurs)\n\n## Test expectations\n\n* Unit test that confirms the builder fails with a clear message when the contract file is missing.\n* Unit test that confirms the builder proceeds normally when the contract file exists.\n\n## How to verify\n\n1. Temporarily rename or remove the contract file for a test issue.\n2. Run jloop\u2011build for that issue and verify it aborts with the expected error message.\n3. Restore the contract file and verify the build proceeds.\n4. Run the existing test suite to ensure no regressions.\n\n## Scope Contract\n\n```yaml\nissue: GOL-17\nversion: 1\nacceptance_criteria:\n  - id: AC-1\n    text: In jloop\u2011build step 4, add a guard: `if not contract_path.is_file():` abort with a clear error message (e.g., \"missing contract for TEAM\u2011NNN\").\nnon_goals:\n  - id: NG-1\n    text: Do not change the semantics of the version field beyond adding the existence check.\nrelevant_files:\n  - \"jloop\u2011build\"\nprotected:\n  - \"jloop\u2011build\"\nrisk: low\n```",
+  "idempotency_key": "merge-signal:GOL-17"
+}

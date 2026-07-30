@@ -1,0 +1,10 @@
+{
+  "claimed_at": 1785403475,
+  "committed_at": 1785403475,
+  "key": "merge-signal:GOL-17",
+  "meta": {
+    "file": "/Users/genxsir/jloop/.factory/actions/tmp7vu6qvks.merge-signal.json",
+    "pr": "https://github.com/GenXsirAI/jloop/pull/16"
+  },
+  "state": "committed"
+}
