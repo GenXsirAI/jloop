@@ -92,6 +92,26 @@ class TestFailClosed(unittest.TestCase):
         self.assertNotEqual(rc, 0, "missing labels_add must fail-closed")
         self.assertIn("missing required", err)
 
+    def test_verify_matches(self):
+        desc = self.mod.insert_callout("## Problem\nbody",
+                                       "https://github.com/x/y/pull/1")
+        rc = self.mod.cmd_verify("GOL-TEST", "https://github.com/x/y/pull/1", desc)
+        self.assertEqual(rc, 0, "verify passes when callout url == pr url")
+
+    def test_verify_mismatch_fails(self):
+        # callout points at the abandoned PR #17, finalize was for #20
+        desc = self.mod.insert_callout("## Problem\nbody",
+                                       "https://github.com/x/y/pull/17")
+        rc = self.mod.cmd_verify("GOL-TEST", "https://github.com/x/y/pull/20", desc)
+        self.assertNotEqual(rc, 0, "verify fails on stale/abandoned PR url")
+
+    def test_verify_trailing_slash_tolerated(self):
+        # a callout built with/without a trailing slash must still match
+        desc = self.mod.insert_callout("## Problem\nbody",
+                                       "https://github.com/x/y/pull/1")
+        rc = self.mod.cmd_verify("GOL-TEST", "https://github.com/x/y/pull/1/", desc)
+        self.assertEqual(rc, 0, "trailing slash should not break the match")
+
 
 if __name__ == "__main__":
     unittest.main()
