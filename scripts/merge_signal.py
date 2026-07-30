@@ -170,13 +170,32 @@ def cmd_plan(issue, url, labels, description):
         "new_description": new_desc,
         "idempotency_key": key,
     }
+    # Fail-closed guard (GOL-21, AC-1): the finalize payload is only useful if it
+    # carries all three components. If any is missing, emitting a partial payload
+    # would let the builder silently drop the callout/label half (the 1efa6b
+    # failure mode). Refuse to emit instead of printing an incomplete payload.
+    REQUIRED = ("labels_add", "labels_remove", "new_description")
+    missing = [k for k in REQUIRED if k not in payload or payload[k] is None]
+    if missing:
+        sys.stderr.write(
+            f"merge_signal plan FAILED for {issue}: payload missing required "
+            f"key(s) {missing}; refusing to emit a partial finalize payload.\n"
+        )
+        return 1
     ACTION_DIR.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(ACTION_DIR), suffix=".merge-signal.json")
     with os.fdopen(fd, "w") as f:
         json.dump(payload, f, indent=2)
         f.write("\n")
     if IDEMPOTENCY.exists():
-        _idem(["commit", key, "--meta", json.dumps({"pr": url, "file": tmp})])
+        r = _idem(["commit", key, "--meta", json.dumps({"pr": url, "file": tmp})])
+        # GOL-21, AC-2: if the idempotency backend is present but the commit
+        # failed, the payload record is not durable — do not claim success.
+        if r.returncode != 0:
+            sys.stderr.write(
+                f"merge_signal plan FAILED for {issue}: idempotency commit exited {r.returncode}: {r.stderr.strip()}\n"
+            )
+            return 1
     print(json.dumps({"ok": True, "file": tmp, "payload": payload}, indent=2))
     return 0
 

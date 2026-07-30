@@ -166,7 +166,15 @@ adds `build-complete` + `waiting-to-merge`) AND the `new_description` (which
 injects the `**✅ Solution Ready For Merge**` callout with the PR link below
 `## Problem`). Applying only the label half silently drops the callout — this bit
 the dogfood run (session 1efa6b): labels were swapped but the description was
-never updated. **Before releasing the lease, re-fetch the issue and verify the
+never updated.
+**Plan-failure guard (fail-closed, GOL-21):** the `merge_signal.py plan` call is
+a HARD gate, not advisory. Check its exit code; if it exits non-zero, **abort the
+finalize pass** — do NOT release the lease silently and continue. Comment the
+failure on the issue, release the lease, and end. A failed `plan` means the
+finalize payload is unusable (missing `labels_add` / `labels_remove` /
+`new_description`), and continuing would reproduce the 1efa6b partial-finalize
+failure mode. The same applies if the JSON it emits lacks any of those three
+required keys — abort rather than apply a partial payload. **Before releasing the lease, re-fetch the issue and verify the
 callout string is present** in the description; if it isn't, the finalize was
 partial — re-apply. The `plan` step is idempotency-keyed (`merge-signal:TEAM-NNN`)
 so a retry won't duplicate the callout or stack labels. Move the issue to the
