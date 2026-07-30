@@ -161,9 +161,12 @@ def main():
     ap.add_argument("--base", default=None, help="base branch (default: origin default)")
     a = ap.parse_args()
 
+    from pathlib import Path as _P
+    sys.path.insert(0, str(_P(__file__).resolve().parent))  # GOL-26: find sibling redact.py
+    from redact import redact_secrets  # GOL-26: never echo secrets in errors
     contract, err = _load_contract(a.issue)
     if contract is None:
-        print(json.dumps({"ok": False, "reason": "no-contract", "detail": err}))
+        print(json.dumps({"ok": False, "reason": "no-contract", "detail": redact_secrets(err)}))
         return 4
 
     base = a.base or os.environ.get("JLOOP_BASE_BRANCH")
@@ -179,7 +182,7 @@ def main():
 
     changed, diff_err = _changed_files(base)
     if diff_err:
-        print(json.dumps({"ok": False, "reason": "diff-error", "detail": diff_err,
+        print(json.dumps({"ok": False, "reason": "diff-error", "detail": redact_secrets(diff_err),
                           "issue": a.issue, "base": base}))
         return 4
     # jloop's own runtime bookkeeping (leases, idempotency records) is durable
