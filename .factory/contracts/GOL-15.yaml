@@ -1,0 +1,83 @@
+issue: GOL-15
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: |
+      Lease acquisition & renewal is crash‑safe. The lease script installs a SIGINT/SIGTERM handler that calls `lease.py release --owner "$JLOOP_WORKER_ID"` before exiting. A `lease.py reap --force` mode exists that removes lease files older than 2×TTL (default 30 min) to survive clock jumps.
+  - id: AC-2
+    text: |
+      Lease TTL and renewal interval are configurable. New environment variables `JLOOP_LEASE_TTL` (seconds, default 300) and `JLOOP_LEASE_RENEW_INTERVAL` (seconds, default 120) are read by `scripts/lease.py` and used in the builder’s heartbeat loop. Changing these variables at runtime requires no code rebuild.
+  - id: AC-3
+    text: |
+      All external‑call wrappers redact secrets from logs/output. A helper `redact_secrets(text)` replaces any substring matching `Authorization: Bearer ***` or `[A-Za-z0-9_\-]+=[A-Za-z0-9_\-]+` with `[REDACTED]` before printing or logging. The helper is used wherever `gh`, `curl`, or MCP calls are made.
+  - id: AC-4
+    text: |
+      Path safety – no directory‑traversal possible. In `scripts/lease.py`, `scripts/idempotency.py`, `scripts/verify_scope.py`, and `scripts/watch.py`, every path built from user‑controlled input is normalized and checked: `assert os.path.commonpath([os.path.realpath(target), os.path.realpath(base)]) == os.path.realpath(base)`
+  - id: AC-5
+    text: |
+      Contract version check is strict. Before reading the contract, the builder verifies that the file exists; if missing, the pass aborts with a clear error. If `--strict-version` is supplied (or the env var `JLOOP_STRICT_VERSION=1` is set), the build fails unless the contract’s `version` exactly matches the issue’s `spec_version`.
+  - id: AC-6
+    text: |
+      Dependency versions are pinned for reproducible builds. `pyproject.toml` contains exact versions (`==`) for all runtime dependencies; a `requirements.lock` file is checked in. CI (`validate.yml`) runs `pip-audit --desc --fix` and fails on any vulnerability.
+  - id: AC-7
+    text: |
+      Automated secret scanning runs on every PR. The GitHub Actions workflow includes a step that runs `ggshield scan repo` (or equivalent) and fails if any secret is detected.
+  - id: AC-8
+    text: |
+      Type hints and basic static analysis pass. `mypy --ignore-missing-imports .` returns exit code 0. `ruff check .` returns exit code 0 (no new errors).
+  - id: AC-9
+    text: |
+      Configuration schema validation for `.factory/jloop.yaml`. The file is validated against a lightweight schema (e.g., using `pydantic.BaseModel`) requiring the keys: `team` (string), `repo` (string), `workdir` (string), `python` (string, path to interpreter). Invalid configs cause the builder to abort with a helpful message.
+  - id: AC-10
+    text: |
+      Protected‑files enforcement. `scripts/verify_scope.py` rejects any change that touches a file listed under the protected section of this contract with exit code 2 and a clear message.
+  - id: AC-11
+    text: |
+      Lease audit log is append‑only. Every lease acquire/release/append writes a JSON line to `.factory/audit.log` containing `{timestamp, worker_id, issue_id, action}`. The file is rotated daily (size > 1 MB) and never truncated during a builder’s run.
+non_goals:
+  - id: NG-1
+    text: |
+      Alter the core lease algorithm (O_CREAT|O_EXCL) or replace it with a different locking mechanism (e.g., Redis, database‑based locks).
+  - id: NG-2
+    text: |
+      Change the Linear issue workflow (states, labels) beyond the existing jloop‑spec/build‑review‑merge‑detect pipeline.
+  - id: NG-3
+    text: |
+      Modify the user‑facing CLI (`jloop`, `jloop‑spec`, etc.) other than adding optional environment variables or flags.
+  - id: NG-4
+    text: |
+      Introduce new external service integrations (e.g., Slack notifications, Jira) – the scope remains Linear+GitHub only.
+  - id: NG-5
+    text: |
+      Refactor the repository structure (move scripts, skills, tests) – only additive changes and safety tightening are allowed.
+  - id: NG-6
+    text: |
+      Update the JLoop version number or publish a new PyPI release; that is a separate release process.
+relevant_files:
+  - "scripts/lease.py"
+  - "scripts/idempotency.py"
+  - "scripts/verify_scope.py"
+  - "scripts/watch.py"
+  - "scripts/merge_signal.py"
+  - "scripts/validate.py"
+  - "pyproject.toml"
+  - "requirements.lock"
+  - ".github/workflows/validate.yml"
+  - ".factory/audit.log"
+  - "docs/DEVELOPMENT.md"
+protected:
+  - "scripts/idempotency.py"
+  - "scripts/verify_scope.py"
+  - "scripts/watch.py"
+  - "scripts/merge_signal.py"
+  - "scripts/validate.py"
+  - ".factory/contracts/"
+  - ".factory/leases/"
+  - ".factory/audit.log"
+  - "pyproject.toml"
+  - "requirements.lock"
+  - ".github/workflows/validate.yml"
+  - "tests/"
+  - "skills/"
+  - ".factory/"
+risk: low
