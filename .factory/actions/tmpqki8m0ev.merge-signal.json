@@ -1,0 +1,16 @@
+{
+  "action": "merge_signal",
+  "issue": "GOL-18",
+  "pr_url": "https://github.com/GenXsirAI/jloop/pull/15",
+  "labels_add": [
+    "waiting-to-merge"
+  ],
+  "labels_remove": [
+    "approved"
+  ],
+  "labels_final": [
+    "waiting-to-merge"
+  ],
+  "new_description": "## Problem\n\nThe key\u2011namespace in scripts/idempotency.py is hard\u2011coded (e.g., pr-create:\u2026). If the same file is reused for other resources (e.g., comment\u2011post) collisions can occur.\n\n**\u2705 Solution Ready For Merge**\n[https://github.com/GenXsirAI/jloop/pull/15](https://github.com/GenXsirAI/jloop/pull/15)\n\n## Acceptance Criteria\n\n- [ ] AC-1 \u2014 scripts/idempotency.py accepts a `--ns` argument (or equivalent) to scope keys.\n- [ ] AC-2 \u2014 The default behavior remains backward\u2011compatible (existing usage still works).\n\n## Non-goals\n\n- [ ] NG-1 \u2014 Do not change the underlying idempotency algorithm beyond making the namespace configurable.\n\n## Relevant files\n\n* scripts/idempotency.py\n\n## Test expectations\n\n* Unit tests for the new `--ns` flag and that the default behavior is unchanged.\n\n## How to verify\n\n1. Run the existing test suite to ensure no regressions.\n2. Test the new `--ns` flag with a custom namespace and verify that the keys are namespaced accordingly.\n3. Verify that omitting the flag uses the legacy namespace.\n\n## Scope Contract\n\n```yaml\nissue: GOL-18\nversion: 1\nacceptance_criteria:\n  - id: AC-1\n    text: scripts/idempotency.py accepts a `--ns` argument (or equivalent) to scope keys.\n  - id: AC-2\n    text: The default behavior remains backward\u2011compatible (existing usage still works).\nnon_goals:\n  - id: NG-1\n    text: Do not change the underlying idempotency algorithm beyond making the namespace configurable.\nrelevant_files:\n  - \"scripts/idempotency.py\"\nprotected:\n  - \"scripts/idempotency.py\"\nrisk: low\n```",
+  "idempotency_key": "merge-signal:GOL-18"
+}
