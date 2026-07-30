@@ -1,0 +1,32 @@
+issue: GOL-27
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: |
+      scripts/merge_signal.py gains a `verify` subcommand that asserts the
+      issue's "✅ ..." callout URL equals the PR url passed via --url; exit
+      non-zero on mismatch (catches stale/abandoned-PR callout links).
+  - id: AC-2
+    text: |
+      scripts/merge_label_cron.sh exits non-zero and prints a NEEDS-ATTENTION
+      summary when it cannot process issues due to API/network errors, so the
+      cron cannot silently die.
+  - id: AC-3
+    text: |
+      scripts/merge_label_cron.sh flags waiting-to-merge issues whose PR was
+      CLOSED without merge (instead of silently skipping them).
+  - id: AC-4
+    text: |
+      New scripts/pr_hygiene.py pre-PR gate fails if the branch carries tmp
+      action records, orphan leases, or contracts for a different issue.
+non_goals:
+  - id: NG-1
+    text: |
+      Do not change the merge_signal.py plan payload shape or label vocabulary.
+relevant_files:
+  - "scripts/merge_signal.py"
+  - "scripts/merge_label_cron.sh"
+  - "scripts/pr_hygiene.py"
+  - "skills/jloop-build"
+protected: []
+risk: low
