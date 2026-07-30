@@ -9,6 +9,9 @@ Checks:
   4. Lease mutual-exclusion + expiry invariant holds (functional test).
   5. Idempotency claim/dup invariant holds (functional test).
   6. Any .factory/contracts/*.yaml parses and has required keys.
+  7. Repo skills/*/SKILL.md match installed copies in $JLOOP_INSTALLED_SKILLS_DIR
+     (default ~/.hermes/skills). Missing or differing installed skills cause
+     failure; missing installed-skills directory skips the check.
 
 Exit 0 = all good; 1 = a check failed (prints the reasons).
 """
@@ -47,6 +50,7 @@ def check_frontmatter():
             continue
         if not desc:
             FAIL.append(f"{skill}: no description in frontmatter")
+            continue
         nm = name.group(1).strip()
         if nm != skill.parent.name:
             FAIL.append(f"{skill}: name '{nm}' != dir '{skill.parent.name}'")
@@ -128,6 +132,37 @@ def check_contracts():
                 FAIL.append(f"{c}: missing key '{key}'")
 
 
+def check_skill_sync():
+    """Check that repo skills match installed copies."""
+    repo_skills_dir = ROOT / "skills"
+    if not repo_skills_dir.is_dir():
+        # No skills in repo (deployment scenario) – nothing to check
+        return
+
+    installed_dir = Path(os.environ.get("JLOOP_INSTALLED_SKILLS_DIR", Path.home() / ".hermes" / "skills"))
+    if not installed_dir.is_dir():
+        # AC-2: when installed-skills directory does not exist (e.g. CI), skip
+        return
+
+    for skill_dir in repo_skills_dir.iterdir():
+        if not skill_dir.is_dir():
+            continue
+        skill_name = skill_dir.name
+        repo_skill_file = skill_dir / "SKILL.md"
+        installed_skill_file = installed_dir / skill_name / "SKILL.md"
+
+        if not repo_skill_file.is_file():
+            # Should not happen, but skip if missing
+            continue
+
+        if not installed_skill_file.is_file():
+            FAIL.append(f"skill {skill_name}: missing in installed skills directory")
+            continue
+
+        if repo_skill_file.read_bytes() != installed_skill_file.read_bytes():
+            FAIL.append(f"skill {skill_name}: content differs between repo and installed")
+
+
 def check_verify_scope():
     """Functional regression for verify_scope.py: in-scope pass, out-of-scope
     violation, and graceful clean-JSON error on a bad base ref."""
@@ -176,6 +211,7 @@ def check_verify_scope():
                 FAIL.append("verify_scope: in-scope change should pass (exit 0, ok:true)")
         except (json.JSONDecodeError, KeyError):
             FAIL.append(f"verify_scope: in-scope produced non-JSON: {r.stdout[:80]!r}")
+
         # 2. out-of-scope (protected path) -> exit 2, violations present
         (td / "src/auth/login.ts").write_text("sneaky\n")
         g("add", "-A")
@@ -186,6 +222,7 @@ def check_verify_scope():
                 FAIL.append("verify_scope: protected-path change should fail (exit 2)")
         except (json.JSONDecodeError, KeyError):
             FAIL.append(f"verify_scope: violation produced non-JSON: {r.stdout[:80]!r}")
+
         # 3. bad base ref -> exit 4, clean JSON, no crash/stderr
         r = subprocess.run(
             [sys.executable, str(vs), "ENG-9", "--base", "no-such-ref"],
@@ -216,8 +253,9 @@ def main():
     check_frontmatter()
     check_scripts_exist()
     check_lease_and_idem()
-    check_verify_scope()
     check_contracts()
+    check_skill_sync()
+    check_verify_scope()
 
     ok = not FAIL
     if args.json:
