@@ -32,6 +32,7 @@ non_goals:
 relevant_files:
   - "scripts/merge_signal.py"
   - "skills/jloop-build"
+  - "tests/test_merge_signal_plan.py"
 protected:
   - "scripts/lease.py"
 risk: low
