@@ -181,6 +181,17 @@ review state if one exists. **Never merge, never enable auto-merge.** Release th
 lease
 (`$PY scripts/lease.py release TEAM-NNN --owner "$JLOOP_WORKER_ID"`) and end.
 
+**Plan-failure guard (GOL-21, fail-closed):** the `merge_signal.py plan` call is
+not optional hygiene — it is a hard gate. After invoking it:
+1. Check its exit code. If non-zero, **abort the pass** (do NOT release the lease
+   silently and continue): comment the failure on the issue, release the lease,
+   and end. A failed `plan` means the finalize payload is unusable.
+2. Validate the JSON it emits contains **all three** required keys —
+   `labels_add`, `labels_remove`, `new_description`. If any is missing, abort the
+   pass the same way (comment, release lease, end). Applying a partial payload
+   silently drops the callout (the 1efa6b failure mode).
+Only after both checks pass may you apply the payload and release the lease.
+
 ## 9. Close-out (when the work is finished)
 When the issue reaches the completed state (`Done`) — whether a human marks it
 after merging your PR, or you do — **strip the pipeline labels**
