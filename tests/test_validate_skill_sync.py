@@ -42,8 +42,8 @@ def test_skill_sync():
         (base / "scripts").mkdir()
         (base / ".factory" / "contracts").mkdir(parents=True)
 
-        # Copy the actual validate.py from the repo (we are in the repo root)
-        repo_scripts = Path("/Users/genxsir/jloop/scripts")
+        # Copy the actual validate.py from the repo (resolve repo root from this file)
+        repo_scripts = Path(__file__).resolve().parent.parent / "scripts"
         for script_name in ["validate.py", "lease.py", "idempotency.py", "verify_scope.py", "merge_signal.py"]:
             src = repo_scripts / script_name
             dst = base / "scripts" / script_name
