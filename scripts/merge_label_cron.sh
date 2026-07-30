@@ -75,13 +75,18 @@ def lgql(q, v):
 
 LABELS_Q = 'query($iid:String!){ issue(id:$iid){ labels{ nodes{ id name } } } }'
 
+unrecoverable = 0
+merged_fixed = 0
+stuck_closed = []   # (ident, pr_number) waiting-to-merge but PR closed-unmerged
+errs = []
+
 for it in issues:
     ident, iid = it['identifier'], it['id']
     # 'done' check requires fetching labels now (scan omitted them for complexity)
     try:
         lab_nodes = lgql(LABELS_Q, {'iid': iid})['data']['issue']['labels']['nodes']
     except Exception as e:
-        print('  WARN', ident, 'label fetch failed:', e); continue
+        print('  WARN', ident, 'label fetch failed:', e); unrecoverable += 1; continue
     labels = [l['name'] for l in lab_nodes]
     if 'done' in labels:
         print('  skip', ident, '(already done)'); continue
@@ -91,23 +96,46 @@ for it in issues:
                              capture_output=True, text=True, timeout=30).stdout
         prs = json.loads(out) if out.strip() else []
     except Exception as e:
-        print('  WARN', ident, 'gh search failed:', e); continue
+        print('  WARN', ident, 'gh search failed:', e); unrecoverable += 1; continue
     merged = [p for p in prs if p.get('state') == 'MERGED']
-    if not merged:
-        print('  skip', ident, '(no merged PR; states=%s)' % [p.get('state') for p in prs]); continue
-    pr = merged[0]
-    print('  DETECT', ident, '-> PR #%s MERGED' % pr['number'])
-    cur = [l['id'] for l in lab_nodes]
-    if L_WAITING in cur: cur.remove(L_WAITING)
-    if L_DONE not in cur: cur.append(L_DONE)
-    if L_MERGED not in cur: cur.append(L_MERGED)
-    q = '''mutation($id:String!,$labels:[String!],$state:String!){
-      issueUpdate(id:$id, input:{ labelIds:$labels, stateId:$state }){ success }
-    }'''
-    if APPLY:
-        res = lgql(q, {'id': iid, 'labels': cur, 'state': S_DONE})
-        print('    APPLIED:', res.get('data', {}).get('issueUpdate'), res.get('errors', ''))
-    else:
-        print('    (dry-run) would set labels=%s state=Done' % cur)
+    closed = [p for p in prs if p.get('state') == 'CLOSED']
+    if merged:
+        pr = merged[0]
+        print('  DETECT', ident, '-> PR #%s MERGED' % pr['number'])
+        cur = [l['id'] for l in lab_nodes]
+        if L_WAITING in cur: cur.remove(L_WAITING)
+        if L_DONE not in cur: cur.append(L_DONE)
+        if L_MERGED not in cur: cur.append(L_MERGED)
+        q = '''mutation($id:String!,$labels:[String!],$state:String!){
+          issueUpdate(id:$id, input:{ labelIds:$labels, stateId:$state }){ success }
+        }'''
+        if APPLY:
+            res = lgql(q, {'id': iid, 'labels': cur, 'state': S_DONE})
+            print('    APPLIED:', res.get('data', {}).get('issueUpdate'), res.get('errors', ''))
+        else:
+            print('    (dry-run) would set labels=%s state=Done' % cur)
+        merged_fixed += 1
+        continue
+    if closed:
+        # B (visibility): waiting-to-merge but PR was closed WITHOUT merge.
+        # The issue is stuck — flag it so a human removes waiting-to-merge.
+        pr = closed[0]
+        print('  STUCK', ident, '-> PR #%s CLOSED (not merged); waiting-to-merge is stale' % pr['number'])
+        stuck_closed.append((ident, pr['number']))
+        continue
+    print('  skip', ident, '(no merged/closed PR; states=%s)' % [p.get('state') for p in prs])
+
+# ---- self-healing summary (recommendation A) ----
+print('--- summary ---')
+print('  merged_fixed=%d stuck_closed_unmerged=%d unrecoverable_errors=%d'
+      % (merged_fixed, len(stuck_closed), unrecoverable))
+if stuck_closed:
+    ids = ', '.join('%s(#%s)' % (i, n) for i, n in stuck_closed)
+    print('  NEEDS ATTENTION: issues still carrying waiting-to-merge but whose PR was '
+          'closed without merge -> %s. Remove the waiting-to-merge label (PR abandoned).' % ids)
+if unrecoverable:
+    # Surface as a hard failure so the cron run is marked error and delivered.
+    print('  UNRECOVERABLE: %d issue(s) could not be processed (network/API).' % unrecoverable)
+    sys.exit(1)
 PY
 log "done."

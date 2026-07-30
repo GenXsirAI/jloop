@@ -200,6 +200,40 @@ def cmd_plan(issue, url, labels, description):
     return 0
 
 
+def cmd_verify(issue, url, description):
+    """Post-finalize guard (GOL-20 root-cause fix): confirm the issue's
+    description actually carries the callout pointing at THIS pr url.
+
+    The builder finalizes by applying the plan payload (label swap + new
+    description). If the description was ever hand-edited or a stale payload
+    applied, the callout can point at a different (e.g. abandoned) PR. This
+    catches that: exit 0 only if a `**✅ ...**` callout exists whose link url
+    equals `url`. Otherwise exit 1 with a clear message naming the mismatch.
+    """
+    m = re.search(
+        r"\*\*✅ [^*]*\*\*\s*\n\[[^\]]*\]\(([^)]+)\)",
+        description if description is not None else "",
+    )
+    if not m:
+        sys.stderr.write(
+            f"merge_signal verify FAILED for {issue}: no '✅ Solution Ready For "
+            f"Merge' / '✅ Merged / Complete' callout found in description.\n"
+        )
+        return 1
+    found = m.group(1).strip().rstrip("/")
+    want = url.strip().rstrip("/")
+    if found != want:
+        sys.stderr.write(
+            f"merge_signal verify FAILED for {issue}: callout points at "
+            f"'{found}' but finalize was for '{want}'. The issue description is "
+            f"out of sync with the PR — re-run plan with the correct --url and "
+            f"re-apply the description.\n"
+        )
+        return 1
+    print(json.dumps({"ok": True, "issue": issue, "callout_url": found}))
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description="jloop merge-signal finalize (GOL-10)")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -213,6 +247,12 @@ def main():
 
     t = sub.add_parser("transform-description", help="pure: stdin desc -> stdout new desc")
     t.add_argument("--url", required=True)
+
+    v = sub.add_parser("verify", help="post-finalize guard: callout URL must match --url")
+    v.add_argument("issue")
+    v.add_argument("--url", required=True, help="the PR URL the callout must point at")
+    v.add_argument("--description", default="", help="current issue description")
+    v.add_argument("--description-file", default="", help="read description from a file")
 
     a = ap.parse_args()
     if a.cmd == "plan":
@@ -228,6 +268,11 @@ def main():
     if a.cmd == "transform-description":
         sys.stdout.write(insert_callout(sys.stdin.read(), a.url))
         sys.exit(0)
+    if a.cmd == "verify":
+        desc = a.description
+        if a.description_file:
+            desc = Path(a.description_file).read_text()
+        sys.exit(cmd_verify(a.issue, a.url, desc))
 
 
 if __name__ == "__main__":

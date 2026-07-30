@@ -1,7 +1,7 @@
 ---
 name: jloop-build
 description: Claim the next approved Linear issue with an atomic lease, implement only its contract, and open exactly one PR. Use to run jloop's builder or fix jloop review feedback. Designed for /loop; one pass does one unit of work.
-version: 1.2.0
+version: 1.1.0
 # 1.1.0 — step 7 finalize must run merge_signal.py plan and apply BOTH the label
 #          and new_description payloads atomically (callout was silently dropped
 #          when set manually — session 1efa6b); verify callout present before
@@ -99,16 +99,6 @@ step, confirm the contract file exists:
 If it is absent, **do not proceed** — release the lease, comment `missing
 contract for TEAM-NNN` on the issue, and end the pass. Never guess or synthesize
 a contract.
-**Strict version mode (fail-closed, GOL-20):** by default the build only checks
-that the contract `version` is *compatible* with the issue's `spec_version`.
-When strict mode is enabled — flag `--strict-version` or env
-`JLOOP_STRICT_VERSION=1` — the build MUST fail unless the contract's `version`
-**exactly equals** the issue's `spec_version`. Implement this as a hard gate:
-read the contract's `version` and the issue's `spec_version`; if strict mode is
-on and they differ, `echo "contract version X != spec_version Y for TEAM-NNN";
-exit 1` (release the lease, comment, end) — do NOT silently continue. Default
-(off) keeps the lenient comparison. This guard lives in the contract loader /
-build preamble; it is not a prose suggestion.
 Fetch the full issue (comments + relations) AND load
 `.factory/contracts/TEAM-NNN.yaml`. Confirm the contract `version` matches the
 issue's current spec version; if not, the spec changed under you — release the
@@ -156,7 +146,12 @@ $PY scripts/idempotency.py claim "pr-create:TEAM-NNN"
   PR so the reviewer re-reviews it even though a verdict label already exists.
   Do not create a duplicate.
 - **Exit 0** → `git push -u origin TEAM-NNN-short-slug` and `gh pr create`
-  targeting `$BASE`. Then
+  targeting `$BASE`. Before pushing, run the hygiene gate and **abort if it
+  fails** (recommendation D — stops dirty-tree cruft from reaching the PR):
+  `$PY scripts/pr_hygiene.py TEAM-NNN --base origin/$BASE`
+  Exit non-zero means the branch carries tmp action records, orphan leases, or
+  contracts for a *different* issue. Clean those (`git rm` / `git reset`) and
+  re-check before `git push`. Then
   `$PY scripts/idempotency.py commit "pr-create:TEAM-NNN" --meta '{"pr":<num>}'`.
 
 PR description MUST include: what changed and why; `Closes TEAM-NNN`; a scope
@@ -184,7 +179,15 @@ failure on the issue, release the lease, and end. A failed `plan` means the
 finalize payload is unusable (missing `labels_add` / `labels_remove` /
 `new_description`), and continuing would reproduce the 1efa6b partial-finalize
 failure mode. The same applies if the JSON it emits lacks any of those three
-required keys — abort rather than apply a partial payload. **Before releasing the lease, re-fetch the issue and verify the
+required keys — abort rather than apply a partial payload.
+**Callout-URL verify guard (GOL-20 root-cause fix):** after applying the
+payload, run the canonical check and **abort if it fails**:
+`$PY scripts/merge_signal.py verify TEAM-NNN --url <pr_url> --description-file <issue-desc>`
+This asserts the `**✅ ...**` callout in the issue description points at the SAME
+PR you just opened. A mismatch means the description is stale (e.g. still pointing
+at an abandoned/closed PR) — re-run `plan` with the correct `--url` and re-apply
+the description before releasing the lease. Never hand-edit the description
+separately from `plan`; doing so is exactly how the stale-link bug arose. **Before releasing the lease, re-fetch the issue and verify the
 callout string is present** in the description; if it isn't, the finalize was
 partial — re-apply. The `plan` step is idempotency-keyed (`merge-signal:TEAM-NNN`)
 so a retry won't duplicate the callout or stack labels. Move the issue to the
