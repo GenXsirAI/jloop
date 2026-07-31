@@ -1,7 +1,13 @@
 ---
 name: jloop-build
 description: Claim the next approved Linear issue with an atomic lease, implement only its contract, and open exactly one PR. Use to run jloop's builder or fix jloop review feedback. Designed for /loop; one pass does one unit of work.
-version: 1.1.0
+version: 1.2.0
+# 1.2.0 — step 7: a PR URL in a comment is NOT a link. Require
+#          scripts/attach_pr.py so the PR lands in the issue's attachment rail
+#          (Linear's GitHub integration is paid/admin-only and fails silently
+#          when absent; `Closes TEAM-NNN` needs it too). Also: verify the review
+#          state EXISTS before setting it — a bogus state name is accepted and
+#          silently ignored.
 # 1.1.0 — step 7 finalize must run merge_signal.py plan and apply BOTH the label
 #          and new_description payloads atomically (callout was silently dropped
 #          when set manually — session 1efa6b); verify callout present before
@@ -162,7 +168,23 @@ If `Other behavior changes: None` is not true, stop and get the Linear issue
 amended (and contract `version` bumped) before opening the PR.
 
 Comment the PR URL on the issue (idempotency-guarded:
-`comment:TEAM-NNN:pr-url:<sha>`). Then **finalize as one atomic action** — do
+`comment:TEAM-NNN:pr-url:<sha>`). Then **attach the PR as a real Linear
+attachment** — a comment is not a link:
+```bash
+$PY scripts/attach_pr.py TEAM-NNN --url <pr_url>
+```
+A PR URL sitting in a comment reads fine to a human but is NOT tracked: it does
+not appear in the issue's attachment rail and does not show merge state. Linear's
+GitHub integration would normally create that attachment itself, but it is a
+per-workspace, paid-plan, admin-only install — when absent, linking fails
+**silently**, and the `Closes TEAM-NNN` magic word in the PR body does nothing
+either (that phrase is consumed by the integration; no integration, nothing
+consumes it). Do not assume the branch name will trigger it: Linear's own
+`gitBranchName` is `<assignee>/<team>-nnn-...`, which jloop's `TEAM-NNN-slug`
+convention deliberately does not match. `attach_pr.py` is idempotent — it
+no-ops when the URL is already attached, so it is safe for users who *do* have
+the integration. Verify by re-fetching the issue and confirming the URL appears
+in `attachments`; a comment alone does not satisfy this step. Then **finalize as one atomic action** — do
 NOT hand-set the labels and hand-edit the description separately. Run
 `$PY scripts/merge_signal.py plan TEAM-NNN --url <pr_url> --labels '<current
 labels JSON>' --description-file <issue-desc>` and apply the **whole** payload it
@@ -191,7 +213,14 @@ separately from `plan`; doing so is exactly how the stale-link bug arose. **Befo
 callout string is present** in the description; if it isn't, the finalize was
 partial — re-apply. The `plan` step is idempotency-keyed (`merge-signal:TEAM-NNN`)
 so a retry won't duplicate the callout or stack labels. Move the issue to the
-review state if one exists. **Never merge, never enable auto-merge.** Release the
+review state **if one exists** — enumerate the team's real states first
+(`mcp__linear__list_issue_statuses`) and only set a name that is actually in
+that list. Setting a non-existent state (e.g. `In Review` on a team whose
+workflow is Backlog/Todo/In Progress/Done/Canceled) is accepted by the API and
+**silently ignored**: the issue stays put and you will report a move that never
+happened. If the team has no review state, leave it in the started state —
+`waiting-to-merge` is what carries the signal.
+**Never merge, never enable auto-merge.** Release the
 lease
 (`$PY scripts/lease.py release TEAM-NNN --owner "$JLOOP_WORKER_ID"`) and end.
 
