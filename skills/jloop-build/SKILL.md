@@ -1,7 +1,11 @@
 ---
 name: jloop-build
 description: Claim the next approved Linear issue with an atomic lease, implement only its contract, and open exactly one PR. Use to run jloop's builder or fix jloop review feedback. Designed for /loop; one pass does one unit of work.
-version: 1.2.0
+version: 1.3.0
+# 1.3.0 — step 7: finalize must be verified by scripts/verify_finalize.py (exit 7
+#          on a missing callout / PR link), not by eye. Setting labels by hand
+#          skips merge_signal.py's new_description half, leaving a "Done" issue
+#          with no record of what shipped. Prose warnings failed twice.
 # 1.2.0 — step 7: a PR URL in a comment is NOT a link. Require
 #          scripts/attach_pr.py so the PR lands in the issue's attachment rail
 #          (Linear's GitHub integration is paid/admin-only and fails silently
@@ -211,7 +215,18 @@ at an abandoned/closed PR) — re-run `plan` with the correct `--url` and re-app
 the description before releasing the lease. Never hand-edit the description
 separately from `plan`; doing so is exactly how the stale-link bug arose. **Before releasing the lease, re-fetch the issue and verify the
 callout string is present** in the description; if it isn't, the finalize was
-partial — re-apply. The `plan` step is idempotency-keyed (`merge-signal:TEAM-NNN`)
+partial — re-apply. **Verify with a script, not by eye** — prose warnings have
+failed repeatedly here (one session applied only the label half; another set the
+labels BY HAND and never ran `merge_signal.py` at all, leaving the idempotency
+dir empty and the issue with no record of what shipped):
+```bash
+$PY scripts/verify_finalize.py TEAM-NNN --url <pr_url>
+```
+**Exit 7** → the finalize is incomplete (callout and/or PR link missing). Fix it
+before releasing the lease; do not report the issue as finalized. The general
+rule this enforces: confirming a mutation CALL was made is not the same as
+confirming the RESULT — always read it back. The `plan` step is
+idempotency-keyed (`merge-signal:TEAM-NNN`)
 so a retry won't duplicate the callout or stack labels. Move the issue to the
 review state **if one exists** — enumerate the team's real states first
 (`mcp__linear__list_issue_statuses`) and only set a name that is actually in
