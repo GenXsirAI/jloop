@@ -223,4 +223,16 @@ for it in issues:
 print('--- pass2 summary ---')
 print('  callout_fixed=%d' % callout_fixed)
 PY2
+
+# ===========================================================================
+# PASS 3 — board-hygiene audit (GOL-28). Catches state/label contradictions
+# the merge reconciliation misses: Duplicate/Canceled still carrying build
+# labels (R1), done/merged labels on a non-Done state (R2), pipeline labels
+# lingering on done/merged issues (R3). Advisory findings (R4/R5) are reported
+# only. Applies the same --apply policy as the rest of this cron.
+# ===========================================================================
+log "running board-hygiene audit..."
+REPO_ROOT="$(dirname "$CRON_DIR")"
+python3 "${REPO_ROOT}/scripts/board_audit.py" $( [ "$APPLY" -eq 1 ] && echo "--apply" ) 2>&1 | sed 's/^/  [audit] /'
+
 log "done."

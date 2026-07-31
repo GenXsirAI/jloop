@@ -1,0 +1,31 @@
+issue: GOL-28
+version: 1
+acceptance_criteria:
+  - id: AC-1
+    text: |
+      scripts/board_audit.py detects, with no network dependency on the pure
+      functions, these contradictions: Duplicate/Canceled carrying build labels
+      (R1); done/merged label on a non-Done state (R2); done/merged carrying
+      pipeline labels (R3).
+  - id: AC-2
+    text: |
+      board_audit.py --apply removes the offending labels / sets the correct
+      state for R1-R3 only; advisory findings (R4 waiting-to-merge-no-PR,
+      R5 build-in-progress-no-lease) are reported but never auto-applied.
+  - id: AC-3
+    text: |
+      The merge-label cron invokes board_audit.py as Pass 3 (same --apply
+      policy), so the board is reconciled on every 20-min run.
+  - id: AC-4
+    text: |
+      Pure detection functions are covered by tests/test_board_audit.py.
+non_goals:
+  - id: NG-1
+    text: |
+      Do not auto-resolve advisory findings (R4/R5) — they need human judgment.
+relevant_files:
+  - "scripts/board_audit.py"
+  - "scripts/merge_label_cron.sh"
+  - "tests/test_board_audit.py"
+protected: []
+risk: low
